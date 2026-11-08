@@ -75,7 +75,7 @@ abstract class GlassSheet(protected val act: Activity) {
     /** A labelled slider. Returns the block so it can be hidden. */
     protected fun slider(
         col: LinearLayout, label: String, min: Int, max: Int, step: Int,
-        get: () -> Int, set: (Int) -> Unit, fmt: (Int) -> String,
+        get: () -> Int, set: (Int) -> Unit, onRelease: (() -> Unit)? = null, fmt: (Int) -> String,
     ): View {
         val box = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
         val row = LinearLayout(act).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -105,7 +105,7 @@ abstract class GlassSheet(protected val act: Activity) {
                 value.text = fmt(get())
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) = save()
+            override fun onStopTrackingTouch(sb: SeekBar) { save(); onRelease?.invoke() }
         })
         return box
     }

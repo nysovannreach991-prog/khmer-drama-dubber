@@ -229,9 +229,11 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_LOGO || requestCode == REQ_LT_PIC) {
+        if (requestCode >= REQ_BRAND && requestCode < REQ_BRAND + BrandSheet.Pick.values().size) {
             val uri = data?.data
-            if (resultCode == RESULT_OK && uri != null) brandSheet?.imagePicked(requestCode == REQ_LOGO, uri)
+            if (resultCode == RESULT_OK && uri != null) {
+                brandSheet?.picked(BrandSheet.Pick.values()[requestCode - REQ_BRAND], uri)
+            }
             return
         }
         if (requestCode != REQ_VIDEO && requestCode != REQ_SRT) return
@@ -323,9 +325,15 @@ class MainActivity : Activity() {
         if (brandSheet != null) return
         brandSheet = BrandSheet(
             this, videoFrame,
-            onPickImage = { forLogo ->
-                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
-                startActivityForResult(i, if (forLogo) REQ_LOGO else REQ_LT_PIC)
+            onPick = { kind ->
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                when (kind) {
+                    // a logo can be a picture or a green/blue-screen video (.mp4, .mov)
+                    BrandSheet.Pick.LOGO -> i.setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+                    BrandSheet.Pick.LT_PICTURE -> i.type = "image/*"
+                    BrandSheet.Pick.LT_VIDEO -> i.type = "video/*"
+                }
+                startActivityForResult(i, REQ_BRAND + kind.ordinal)
             },
             onClosed = { brandSheet = null; refreshBrandCard() },
         ).also { it.show() }
@@ -341,9 +349,11 @@ class MainActivity : Activity() {
         }
         val lines = mutableListOf<String>()
         val sp = videoFrame?.let { b.spot(it.width, it.height) } ?: b.wide
-        if (b.hasLogo(this)) lines += "✓  Logo  ·  ${where(sp.logoX, sp.logoY)}"
+        val animated = File(Brand.logoClipDir(this), "clip.json").exists()
+        if (b.hasLogo(this)) lines += "✓  ${if (animated) "Animated logo" else "Logo"}  ·  ${where(sp.logoX, sp.logoY)}"
         if (b.hasLowerThird(this)) {
-            lines += "✓  Lower third  ·  " + if (b.ltEvery == 0) "always on" else "every ${b.ltEvery} min"
+            val kind = if (b.ltMode == Brand.VIDEO) "Video lower third" else "Lower third"
+            lines += "✓  $kind  ·  " + if (b.ltEvery == 0) "always on" else "every ${b.ltEvery} min"
         }
         if (lines.isEmpty()) {
             txtBrand.text = "Put your logo and a name banner on every video"
@@ -550,8 +560,7 @@ class MainActivity : Activity() {
         const val REQ_SRT = 4
         const val REQ_STORAGE = 2
         const val REQ_NOTIFY = 3
-        const val REQ_LOGO = 5
-        const val REQ_LT_PIC = 6
+        const val REQ_BRAND = 10   // + BrandSheet.Pick.ordinal
     }
 }
 

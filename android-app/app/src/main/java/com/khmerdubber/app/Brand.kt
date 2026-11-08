@@ -57,7 +57,7 @@ class Brand(
     var logoOpacity: Int = 90,       // %
     var logoRound: Boolean = false,  // crop the logo to a circle
     var ltOn: Boolean = true,
-    var ltPicture: Boolean = false,  // false = text banner made by the app, true = own picture
+    var ltMode: Int = TEXT,          // TEXT banner made by the app, own PICTURE, or VIDEO (green/blue screen)
     var ltTitle: String = "",
     var ltSub: String = "",
     var ltColor: Int = 0,
@@ -83,17 +83,20 @@ class Brand(
     /** The preset for a w×h video: landscape (or square) or vertical. */
     fun spot(w: Int, h: Int) = if (w >= h) wide else tall
 
-    fun hasLogo(ctx: Context) = logoFile(ctx).exists()
+    fun hasLogo(ctx: Context) = logoFile(ctx).exists() || File(logoClipDir(ctx), "clip.json").exists()
 
-    fun hasLowerThird(ctx: Context) = ltOn &&
-        if (ltPicture) pictureFile(ctx).exists() else (ltTitle.isNotBlank() || ltSub.isNotBlank())
+    fun hasLowerThird(ctx: Context) = ltOn && when (ltMode) {
+        PICTURE -> pictureFile(ctx).exists()
+        VIDEO -> File(ltClipDir(ctx), "clip.json").exists()
+        else -> ltTitle.isNotBlank() || ltSub.isNotBlank()
+    }
 
     fun active(ctx: Context) = hasLogo(ctx) || hasLowerThird(ctx)
 
     fun save(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt("logoOpacity", logoOpacity).putBoolean("logoRound", logoRound)
-            .putBoolean("ltOn", ltOn).putBoolean("ltPicture", ltPicture)
+            .putBoolean("ltOn", ltOn).putInt("ltMode", ltMode)
             .putString("ltTitle", ltTitle).putString("ltSub", ltSub)
             .putInt("ltColor", ltColor)
             .putInt("ltEvery", ltEvery).putInt("ltStay", ltStay)
@@ -108,6 +111,9 @@ class Brand(
 
     companion object {
         private const val PREFS = "brand"
+        const val TEXT = 0
+        const val PICTURE = 1
+        const val VIDEO = 2
 
         /** Banner colours: main, accent stripe. */
         val COLORS = intArrayOf(0xFFDC2626.toInt(), 0xFF1D4ED8.toInt(), 0xFF7C3AED.toInt(),
@@ -118,6 +124,19 @@ class Brand(
         private fun dir(ctx: Context) = File(ctx.filesDir, "brand").apply { mkdirs() }
         fun logoFile(ctx: Context) = File(dir(ctx), "logo.png")
         fun pictureFile(ctx: Context) = File(dir(ctx), "lower_third.png")
+        fun logoClipDir(ctx: Context) = File(dir(ctx), "logo_clip")
+        fun ltClipDir(ctx: Context) = File(dir(ctx), "lt_clip")
+        fun logoVideoFile(ctx: Context) = File(dir(ctx), "logo_src")
+        fun ltVideoFile(ctx: Context) = File(dir(ctx), "lt_src")
+
+        /** Copy a picked video into the app so it can be processed again later (other colour, strength). */
+        fun importVideo(ctx: Context, uri: Uri, dest: File) {
+            val tmp = File(dest.parentFile, dest.name + ".tmp")
+            val input = ctx.contentResolver.openInputStream(uri) ?: throw IOException("can't open this video")
+            input.use { inp -> tmp.outputStream().use { inp.copyTo(it, 1 shl 16) } }
+            dest.delete()
+            if (!tmp.renameTo(dest)) throw IOException("can't save the video")
+        }
 
         fun load(ctx: Context): Brand {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -130,7 +149,8 @@ class Brand(
                 logoOpacity = p.getInt("logoOpacity", d.logoOpacity),
                 logoRound = p.getBoolean("logoRound", d.logoRound),
                 ltOn = p.getBoolean("ltOn", d.ltOn),
-                ltPicture = p.getBoolean("ltPicture", d.ltPicture),
+                // v1.3 saved "ltPicture"; keep that choice
+                ltMode = p.getInt("ltMode", if (p.getBoolean("ltPicture", false)) PICTURE else TEXT),
                 ltTitle = p.getString("ltTitle", d.ltTitle) ?: "",
                 ltSub = p.getString("ltSub", d.ltSub) ?: "",
                 ltColor = p.getInt("ltColor", d.ltColor).coerceIn(0, COLORS.size - 1),
@@ -177,8 +197,12 @@ class Brand(
  */
 class BrandArt(private val ctx: Context, val brand: Brand) {
 
-    /** A picture placed in the frame. [x],[y] = its top-left; [pad] = see-through border (room for a shadow). */
-    class Item(val bitmap: Bitmap, val x: Float, val y: Float, val pad: Float) {
+    /**
+     * A picture placed in the frame. [x],[y] = its top-left; [pad] = see-through border (room for a
+     * shadow). For a video, [bitmap] is its fullest frame at the size it is shown, and [clip] has
+     * the frames.
+     */
+    class Item(val bitmap: Bitmap, val x: Float, val y: Float, val pad: Float, val clip: BrandClip? = null) {
         val boxW get() = bitmap.width - 2 * pad
         val boxH get() = bitmap.height - 2 * pad
     }
@@ -187,21 +211,36 @@ class BrandArt(private val ctx: Context, val brand: Brand) {
 
     private var logoSrc: Bitmap? = null
     private var pictureSrc: Bitmap? = null
+    var logoClip: BrandClip? = null
+        private set
+    var ltClip: BrandClip? = null
+        private set
+    private var ltClipSrc: Bitmap? = null
     private var logoCache: Pair<String, Bitmap>? = null
     private var lowerCache: Pair<String, Pair<Bitmap, Float>?>? = null
 
     init { reloadImages() }
 
     fun reloadImages() {
-        logoSrc = Brand.logoFile(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
+        logoClip = BrandClip.load(Brand.logoClipDir(ctx))
+        logoSrc = logoClip?.let { it.frame(it.cover) }
+            ?: Brand.logoFile(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
         pictureSrc = Brand.pictureFile(ctx).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
+        ltClip = BrandClip.load(Brand.ltClipDir(ctx))
+        ltClipSrc = ltClip?.let { it.frame(it.cover) }
         logoCache = null
         lowerCache = null
     }
 
     val hasLogo get() = logoSrc != null
-    val hasLowerThird get() = brand.ltOn &&
-        if (brand.ltPicture) pictureSrc != null else (brand.ltTitle.isNotBlank() || brand.ltSub.isNotBlank())
+    val hasLowerThird get() = brand.ltOn && when (brand.ltMode) {
+        Brand.PICTURE -> pictureSrc != null
+        Brand.VIDEO -> ltClip != null
+        else -> brand.ltTitle.isNotBlank() || brand.ltSub.isNotBlank()
+    }
+
+    /** The lower third that will be used is a video. */
+    val lowerIsVideo get() = brand.ltMode == Brand.VIDEO && ltClip != null
 
     fun margin(w: Int, h: Int) = min(w, h) * 0.045f
 
@@ -224,10 +263,11 @@ class BrandArt(private val ctx: Context, val brand: Brand) {
     fun logo(w: Int, h: Int): Item? {
         val src = logoSrc ?: return null
         val sp = brand.spot(w, h)
-        val key = "$w|$h|${sp.logoSize}|${brand.logoRound}"
+        val round = brand.logoRound && logoClip == null  // videos keep their own shape
+        val key = "$w|$h|${sp.logoSize}|$round"
         val bmp = logoCache?.takeIf { it.first == key }?.second ?: run {
             var lh = min(w, h) * sp.logoSize / 100f
-            var lw = if (brand.logoRound) lh else lh * src.width / src.height
+            var lw = if (round) lh else lh * src.width / src.height
             val maxW = w * 0.45f
             if (lw > maxW) { lh *= maxW / lw; lw = maxW }
             val bw = max(1, lw.roundToInt())
@@ -235,7 +275,7 @@ class BrandArt(private val ctx: Context, val brand: Brand) {
             val out = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
             val c = Canvas(out)
             val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            if (brand.logoRound) {
+            if (round) {
                 val side = min(src.width, src.height)
                 val sq = Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
                 c.drawOval(RectF(0f, 0f, bw.toFloat(), bh.toFloat()), p)
@@ -248,19 +288,23 @@ class BrandArt(private val ctx: Context, val brand: Brand) {
             out
         }
         val (x, y) = place(sp.logoX, sp.logoY, bmp.width.toFloat(), bmp.height.toFloat(), w, h)
-        return Item(bmp, x, y, 0f)
+        return Item(bmp, x, y, 0f, logoClip)
     }
 
     fun lowerThird(w: Int, h: Int): Item? {
         if (!hasLowerThird) return null
         val sp = brand.spot(w, h)
-        val key = "$w|$h|${brand.ltPicture}|${brand.ltTitle}|${brand.ltSub}|${brand.ltColor}|${sp.ltSize}"
+        val key = "$w|$h|${brand.ltMode}|${brand.ltTitle}|${brand.ltSub}|${brand.ltColor}|${sp.ltSize}"
         val made = lowerCache?.takeIf { it.first == key }?.second
-            ?: (if (brand.ltPicture) pictureBanner(w, h) else textBanner(w, h)).also { lowerCache = key to it }
+            ?: when (brand.ltMode) {
+                Brand.PICTURE -> pictureBanner(w, h)
+                Brand.VIDEO -> videoBanner(w, h)
+                else -> textBanner(w, h)
+            }.also { lowerCache = key to it }
             ?: return null
         val (bmp, pad) = made
         val (x, y) = place(sp.ltX, sp.ltY, bmp.width - 2 * pad, bmp.height - 2 * pad, w, h)
-        return Item(bmp, x - pad, y - pad, pad)
+        return Item(bmp, x - pad, y - pad, pad, if (lowerIsVideo) ltClip else null)
     }
 
     private fun pictureBanner(w: Int, h: Int): Pair<Bitmap, Float>? {
@@ -271,6 +315,40 @@ class BrandArt(private val ctx: Context, val brand: Brand) {
         var bh = bw * src.height / src.width
         if (bh > h * 0.45f) { bw *= h * 0.45f / bh; bh = h * 0.45f }
         return smooth(src, max(1, bw.roundToInt()), max(1, bh.roundToInt())) to 0f
+    }
+
+    /**
+     * A green-screen lower third. Videos made as a full picture (a 1920×1080 "pack") keep the size
+     * they were designed at, relative to the frame; small clips are sized as if made for 1080p.
+     * Size % scales from there.
+     */
+    private fun videoBanner(w: Int, h: Int): Pair<Bitmap, Float>? {
+        val c = ltClip ?: return null
+        val src = ltClipSrc ?: return null
+        val m = margin(w, h)
+        val short = min(w, h).toFloat()
+        val fullPicture = min(c.canvasW, c.canvasH) >= 480 && max(c.canvasW, c.canvasH) >= 800
+        val factor = if (fullPicture) short / min(c.canvasW, c.canvasH) else short / 1080f
+        var bw = c.box.width() * factor * brand.spot(w, h).ltSize / 100f
+        var bh = c.box.height() * factor * brand.spot(w, h).ltSize / 100f
+        val fit = min(1f, min((w - 2 * m) / bw, h * 0.6f / bh))
+        bw *= fit; bh *= fit
+        return smooth(src, max(1, bw.roundToInt()), max(1, bh.roundToInt())) to 0f
+    }
+
+    /**
+     * Which frame of a video lower third shows [t] seconds into a video of [duration] seconds,
+     * or null when it is hidden. It plays once each time it shows, or loops when always on.
+     */
+    fun lowerClipIndex(t: Double, duration: Double): Int? {
+        val c = ltClip ?: return null
+        if (brand.ltEvery <= 0) return c.indexAt(t, loop = true)
+        val first = 3.0
+        val period = brand.ltEvery * 60.0
+        if (t < first) return null
+        val start = first + floor((t - first) / period) * period
+        if (start > duration - 1.0) return null
+        return c.indexAt(t - start, loop = false)
     }
 
     /** Broadcast-style banner: coloured name bar with an accent stripe, white second line under it. */
@@ -403,16 +481,25 @@ class BrandArt(private val ctx: Context, val brand: Brand) {
 /** Re-makes the video picture with the logo and lower third on top (audio is copied as-is). */
 object BrandExport {
 
-    /** One picture laid over every frame, placed once the video size is known. */
+    /**
+     * One picture laid over every frame, placed once the video size is known. For a video logo or
+     * lower third, [frameIndex] says which of its frames to show (null = hidden).
+     */
     private class PlacedOverlay(
         private val make: (Int, Int) -> BrandArt.Item?,
         private val look: (BrandArt.Item, Int, Int, Long) -> BrandArt.Look?,
+        private val frameIndex: ((Long) -> Int?)? = null,
     ) : BitmapOverlay() {
         private var item: BrandArt.Item? = null
         private var w = 1
         private var h = 1
         private val blank = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         private val hidden = StaticOverlaySettings.Builder().setAlphaScale(0f).build()
+        // two bitmaps used in turn, so each new video frame is a new picture for the GPU
+        private val bufs = arrayOfNulls<Bitmap>(2)
+        private var flip = 0
+        private var shownIndex = -1
+        private var shown: Bitmap? = null
 
         override fun configure(videoSize: Size) {
             super.configure(videoSize)
@@ -421,17 +508,33 @@ object BrandExport {
             item = make(w, h)
         }
 
-        override fun getBitmap(presentationTimeUs: Long): Bitmap = item?.bitmap ?: blank
+        override fun getBitmap(presentationTimeUs: Long): Bitmap {
+            val it = item ?: return blank
+            val clip = it.clip ?: return it.bitmap
+            val i = frameIndex?.invoke(presentationTimeUs) ?: clip.cover
+            if (i != shownIndex || shown == null) {
+                flip = 1 - flip
+                val b = clip.frame(i, bufs[flip])
+                bufs[flip] = b
+                shown = b
+                shownIndex = i
+            }
+            return shown!!
+        }
 
         override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
             val it = item ?: return hidden
             val l = look(it, w, h, presentationTimeUs) ?: return hidden
+            val clip = it.clip
+            if (clip != null && frameIndex != null && frameIndex.invoke(presentationTimeUs) == null) return hidden
             val a = anchors(it.x + l.dx, it.y + l.dy, it.bitmap.width, it.bitmap.height, w, h) ?: return hidden
-            return StaticOverlaySettings.Builder()
+            val b = StaticOverlaySettings.Builder()
                 .setOverlayFrameAnchor(a[2], a[3])
                 .setBackgroundFrameAnchor(a[0], a[1])
                 .setAlphaScale(l.alpha)
-                .build()
+            // video frames are kept at their own size; the GPU scales them to the size shown
+            if (clip != null) b.setScale(it.bitmap.width.toFloat() / clip.box.width(), it.bitmap.height.toFloat() / clip.box.height())
+            return b.build()
         }
     }
 
@@ -462,13 +565,22 @@ object BrandExport {
         val dur = durationMs / 1000.0
         val overlays = ArrayList<TextureOverlay>()
         if (art.hasLowerThird) {
-            overlays.add(PlacedOverlay({ w, h -> art.lowerThird(w, h) }) { item, w, h, us ->
-                art.lowerLook(us / 1e6, dur, item, w, h)
-            })
+            if (art.lowerIsVideo) {
+                val full = BrandArt.Look(1f, 0f, 0f)  // a video brings its own animation
+                overlays.add(PlacedOverlay({ w, h -> art.lowerThird(w, h) }, { _, _, _, _ -> full }) { us ->
+                    art.lowerClipIndex(us / 1e6, dur)
+                })
+            } else {
+                overlays.add(PlacedOverlay({ w, h -> art.lowerThird(w, h) }, { item, w, h, us ->
+                    art.lowerLook(us / 1e6, dur, item, w, h)
+                }))
+            }
         }
         if (art.hasLogo) {
             val logoLook = BrandArt.Look(brand.logoOpacity / 100f, 0f, 0f)
-            overlays.add(PlacedOverlay({ w, h -> art.logo(w, h) }) { _, _, _, _ -> logoLook })
+            val clip = art.logoClip
+            overlays.add(PlacedOverlay({ w, h -> art.logo(w, h) }, { _, _, _, _ -> logoLook },
+                clip?.let { c -> { us: Long -> c.indexAt(us / 1e6, loop = true) } }))
         }
         if (overlays.isEmpty()) throw IOException("nothing to add")
 

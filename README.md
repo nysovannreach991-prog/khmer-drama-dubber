@@ -50,14 +50,21 @@ time by default, which is the fastest. Lower it if your internet is slow or line
 
 ### Logo & Lower third
 Tap the **Logo & Lower third** card to put your brand on every dubbed video:
-- **Logo**: choose a picture (PNG with a see-through background looks best). Set its size and opacity,
-  or make it round.
+- **Logo**: choose a picture (PNG with a see-through background looks best) or an animated logo video
+  (MP4 or MOV on a green or blue screen; it loops). Set its size and opacity, or make a picture round.
 - **Lower third**: type your page name (Khmer works) and an optional second line, then pick a colour.
-  You can also use your own picture made in Canva. It slides in every few minutes (you choose how often
-  and for how long), or stays on all the time.
+  You can also use your own picture made in Canva, or a **video** lower third (MP4 or MOV on a green or
+  blue screen, like the free "lower third green screen" packs). It shows every few minutes (you choose
+  how often), or stays on all the time.
 - **Landscape 16:9 / Vertical 9:16**: each shape keeps its own places and sizes. Every video uses the one
   that fits it.
 - **Position**: tap a spot on the 3×3 pad, or drag the logo or lower third in the preview.
+- **Green / blue screen videos**: the background colour is found and removed by itself, and the empty
+  part of the picture is cut away, so a full 1920×1080 pack becomes just the graphic. If some
+  background is left, raise **Strength**; if parts of the graphic disappear, lower it or pick the other
+  colour. **None** keeps the whole video picture. Logos are kept up to 10 s, lower thirds up to 20 s.
+  Videos with a real see-through background (ProRes 4444 .mov) can't be read on phones; export them on a
+  green background instead.
 
 With a logo or lower third, saving takes longer because the picture is re-made (46 s for a
 2-minute 720p video on the Mac's test phone; real phones with a hardware encoder are usually faster). If a phone can't re-make a video, it's saved without them and

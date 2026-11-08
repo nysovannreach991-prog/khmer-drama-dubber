@@ -80,11 +80,14 @@ class BrandPreviewView @JvmOverloads constructor(ctx: Context, attrs: AttributeS
 
     private var playing: ValueAnimator? = null
     private var playSince = -1.0
-    private val playLength = 3.4
+    private var playLength = 3.4
+    private val clipFrames = HashMap<BrandClip, Pair<Int, Bitmap>>()
 
-    /** Show the lower third sliding in and out once. */
+    /** Show the lower third coming in and going out once (a video plays to its end). */
     fun play() {
         playing?.cancel()
+        val a = art
+        playLength = if (a != null && a.lowerIsVideo) max(3.4, a.ltClip!!.duration + 0.4) else 3.4
         playing = ValueAnimator.ofFloat(0f, playLength.toFloat()).apply {
             duration = (playLength * 1000).toLong()
             interpolator = LinearInterpolator()
@@ -131,18 +134,32 @@ class BrandPreviewView @JvmOverloads constructor(ctx: Context, attrs: AttributeS
         canvas.clipRect(0f, 0f, w.toFloat(), h.toFloat())
 
         a.lowerThird(w, h)?.let { item ->
-            val look = if (playSince >= 0) a.lookAt(playSince, playLength, item, w, h) else BrandArt.Look(1f, 0f, 0f)
-            if (look != null) {
-                bmpPaint.alpha = (look.alpha * 255).toInt()
-                canvas.drawBitmap(item.bitmap, item.x + look.dx, item.y + look.dy, bmpPaint)
-                bmpPaint.alpha = 255
+            val clip = item.clip
+            if (clip != null) {
+                // a video: still frame, or its frames while playing
+                val i = if (playSince >= 0) clip.indexAt(playSince, loop = false) else -1
+                if (i == -1) canvas.drawBitmap(item.bitmap, item.x, item.y, bmpPaint)
+                else if (i != null) drawClipFrame(canvas, clip, i, item, 255)
+            } else {
+                val look = if (playSince >= 0) a.lookAt(playSince, playLength, item, w, h) else BrandArt.Look(1f, 0f, 0f)
+                if (look != null) {
+                    bmpPaint.alpha = (look.alpha * 255).toInt()
+                    canvas.drawBitmap(item.bitmap, item.x + look.dx, item.y + look.dy, bmpPaint)
+                    bmpPaint.alpha = 255
+                }
             }
             if (dragging == Target.LOWER) drawDragBox(canvas, item)
         }
         a.logo(w, h)?.let { item ->
-            bmpPaint.alpha = (a.brand.logoOpacity / 100f * 255).toInt()
-            canvas.drawBitmap(item.bitmap, item.x, item.y, bmpPaint)
-            bmpPaint.alpha = 255
+            val alpha = (a.brand.logoOpacity / 100f * 255).toInt()
+            val clip = item.clip
+            if (clip != null && playSince >= 0) {
+                drawClipFrame(canvas, clip, clip.indexAt(playSince, loop = true) ?: 0, item, alpha)
+            } else {
+                bmpPaint.alpha = alpha
+                canvas.drawBitmap(item.bitmap, item.x, item.y, bmpPaint)
+                bmpPaint.alpha = 255
+            }
             if (dragging == Target.LOGO) drawDragBox(canvas, item)
         }
         if (dragging != null) {
@@ -150,6 +167,15 @@ class BrandPreviewView @JvmOverloads constructor(ctx: Context, attrs: AttributeS
             if (snapY) canvas.drawLine(0f, h / 2f, w.toFloat(), h / 2f, guidePaint)
         }
         canvas.restore()
+    }
+
+    private fun drawClipFrame(canvas: Canvas, clip: BrandClip, i: Int, item: BrandArt.Item, alpha: Int) {
+        val cached = clipFrames[clip]
+        val frame = if (cached != null && cached.first == i) cached.second
+        else clip.frame(i, cached?.second).also { clipFrames[clip] = i to it }
+        bmpPaint.alpha = alpha
+        canvas.drawBitmap(frame, null, RectF(item.x, item.y, item.x + item.bitmap.width, item.y + item.bitmap.height), bmpPaint)
+        bmpPaint.alpha = 255
     }
 
     private fun drawDragBox(canvas: Canvas, item: BrandArt.Item) {
