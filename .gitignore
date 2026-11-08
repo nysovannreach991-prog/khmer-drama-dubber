@@ -14,3 +14,6 @@ config.json
 *.jks
 *.keystore
 keystore.properties
+
+# local Mac helper
+Preview on Mac.command

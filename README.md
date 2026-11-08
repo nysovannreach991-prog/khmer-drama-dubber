@@ -14,7 +14,7 @@ You also get a Khmer `.srt` file next to the dubbed video.
 
 There are two versions. Use the **app** unless you have a reason not to.
 
-| | Android app (`KhmerDubber-v1.0.apk`) | Termux script (`khmer_dubber.py`) |
+| | Android app (APK) | Termux script (`khmer_dubber.py`) |
 |---|---|---|
 | Install | Tap the APK | Termux + `install.sh` |
 | Use | Tap buttons | Type `khmerdub` |
@@ -26,7 +26,9 @@ There are two versions. Use the **app** unless you have a reason not to.
 # Android app
 
 ## Install
-1. Copy `KhmerDubber-v1.0.apk` to the phone (Telegram, Google Drive, USB…) and tap it.
+1. Download the newest APK from
+   https://github.com/nysovannreach991-prog/khmer-drama-dubber/releases/latest
+   on the phone (or copy it over with Telegram, Google Drive, USB…) and tap it.
 2. If Android asks, allow **"Install unknown apps"** for the app you opened it from.
 3. Android may warn that the app is from an unknown developer. Tap **Install anyway** (it's your own app).
 
@@ -44,15 +46,34 @@ There are two versions. Use the **app** unless you have a reason not to.
 
 The `[M]`/`[F]` tags and the "fix a bad translation" tip below work in the app too.
 
-## Rebuild the app (on this Mac)
-The source is in `android-app/`. To make a new APK after changing the code:
+## Updates from GitHub
+The app checks **https://github.com/nysovannreach991-prog/khmer-drama-dubber/releases** every
+time it opens (and with the **Check for updates** button). When there's a newer version it shows
+**Update now**. The first time, Android asks you to allow "Install unknown apps" for Khmer Dubber.
+
+**To publish an update** (after changing the code):
+```bash
+./release.sh 1.2 "What's new in this version"
+```
+This sets the version, commits, tags `v1.2` and pushes. GitHub Actions then tests the code,
+builds the signed APK and creates the release (about 2 minutes). Phones see it next time
+they open the app. Watch the build at
+https://github.com/nysovannreach991-prog/khmer-drama-dubber/actions
+
+The signing key is stored on GitHub as encrypted secrets (`KEYSTORE_B64`, `KEYSTORE_PASSWORD`).
+**Also keep `android-app/khmerdubber.jks` and `keystore.properties` safe on your computer.** Android
+only installs an update over the old app if it's signed with the same key.
+
+## Preview on this Mac
+Double-click **`Preview on Mac.command`**. It opens a virtual Android phone with Khmer Dubber.
+Test videos are already in its Download folder.
+
+## Build by hand (on this Mac)
 ```bash
 cd android-app
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 ./gradlew assembleRelease     # -> app/build/outputs/apk/release/app-release.apk
 ```
-**Keep `android-app/khmerdubber.jks` and `keystore.properties` safe.** Android only installs an
-update over the old app if it's signed with the same key.
 
 If Microsoft changes the edge-tts service and voice lines start failing, compare
 `EdgeDrm.kt` / `EdgeTts.kt` with the latest Python `edge-tts` (`drm.py`, `constants.py`).
