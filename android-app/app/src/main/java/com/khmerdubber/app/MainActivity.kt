@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.MediaPlayer
 import android.net.Uri
@@ -45,6 +46,11 @@ class MainActivity : Activity() {
     private lateinit var txtDetail: TextView
     private lateinit var txtLog: TextView
     private lateinit var progress: ProgressBar
+    private lateinit var brandThumb: BrandPreviewView
+    private lateinit var txtBrand: TextView
+    private var brandSheet: BrandSheet? = null
+    private var videoFrame: Bitmap? = null      // a frame of the first chosen video, for the previews
+    private var videoFrameOf: Uri? = null
 
     private val listener: (DubBus.State) -> Unit = { render(it) }
 
@@ -67,8 +73,12 @@ class MainActivity : Activity() {
         txtDetail = findViewById(R.id.txtDetail)
         txtLog = findViewById(R.id.txtLog)
         progress = findViewById(R.id.progress)
+        brandThumb = findViewById(R.id.brandThumb)
+        txtBrand = findViewById(R.id.txtBrand)
 
         setupVoice()
+        findViewById<View>(R.id.cardBrand).setOnClickListener { openBrand() }
+        refreshBrandCard()
 
         btnVideo.setOnClickListener { pick(video = true) }
         btnSubtitle.setOnClickListener { pick(video = false) }
@@ -134,6 +144,7 @@ class MainActivity : Activity() {
             GuideOverlay.Step(btnSubtitle, "ជ្រើសរើសឯកសារអក្សររត់ (.srt)\nរបស់វីដេអូនោះ"),
             GuideOverlay.Step(findViewById(R.id.rgVoice), "ជ្រើសរើសសំឡេង ស្រី ឬ ប្រុស"),
             GuideOverlay.Step(btnPreview, "ចុចទីនេះ ដើម្បីស្តាប់សំឡេងសាកល្បង"),
+            GuideOverlay.Step(findViewById(R.id.cardBrand), "ដាក់ Logo និង Lower third\nរបស់អ្នកនៅទីនេះ"),
             GuideOverlay.Step(btnStart, "ចុចចាប់ផ្តើម! រួចរង់ចាំបន្តិច\nវីដេអូរួចរាល់នៅក្នុង\nMovies/KhmerDubber"),
             GuideOverlay.Step(findViewById(R.id.btnSettings), "ការកំណត់ផ្សេងៗ នៅទីនេះ\n(ល្បឿន សំឡេង ...)"),
         )
@@ -218,6 +229,11 @@ class MainActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_LOGO || requestCode == REQ_LT_PIC) {
+            val uri = data?.data
+            if (resultCode == RESULT_OK && uri != null) brandSheet?.imagePicked(requestCode == REQ_LOGO, uri)
+            return
+        }
         if (requestCode != REQ_VIDEO && requestCode != REQ_SRT) return
         if (resultCode != RESULT_OK || data == null) return
         val wantVideo = requestCode == REQ_VIDEO
@@ -264,6 +280,8 @@ class MainActivity : Activity() {
         jobs = r.jobs
         val videos = picked.values.filter { Pairing.isVideo(it.first, it.second) }.map { it.first }
         val srts = picked.values.filter { Pairing.isSrt(it.first) }.map { it.first }
+        loadVideoFrame(r.jobs.firstOrNull()?.video
+            ?: picked.entries.firstOrNull { Pairing.isVideo(it.value.first, it.value.second) }?.key)
         btnVideo.text = when (videos.size) {
             0 -> "🎬   Choose video"
             1 -> "🎬   ${videos[0]}"
@@ -297,6 +315,65 @@ class MainActivity : Activity() {
         txtPairs.setTextColor(getColor(R.color.text))
         txtPairs.text = sb
         render(DubBus.state)
+    }
+
+    // ---------------------------------------------------------------- logo & lower third
+
+    private fun openBrand() {
+        if (brandSheet != null) return
+        brandSheet = BrandSheet(
+            this, videoFrame,
+            onPickImage = { forLogo ->
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+                startActivityForResult(i, if (forLogo) REQ_LOGO else REQ_LT_PIC)
+            },
+            onClosed = { brandSheet = null; refreshBrandCard() },
+        ).also { it.show() }
+    }
+
+    private fun refreshBrandCard() {
+        val b = Brand.load(this)
+        brandThumb.art = BrandArt(this, b)
+        fun where(x: Float, y: Float): String {
+            val v = when { y < 0.34f -> "top"; y > 0.66f -> "bottom"; else -> "middle" }
+            val h = when { x < 0.34f -> "left"; x > 0.66f -> "right"; else -> "center" }
+            return if (v == "middle" && h == "center") "center" else "$v $h"
+        }
+        val lines = mutableListOf<String>()
+        val sp = videoFrame?.let { b.spot(it.width, it.height) } ?: b.wide
+        if (b.hasLogo(this)) lines += "✓  Logo  ·  ${where(sp.logoX, sp.logoY)}"
+        if (b.hasLowerThird(this)) {
+            lines += "✓  Lower third  ·  " + if (b.ltEvery == 0) "always on" else "every ${b.ltEvery} min"
+        }
+        if (lines.isEmpty()) {
+            txtBrand.text = "Put your logo and a name banner on every video"
+            txtBrand.setTextColor(getColor(R.color.text3))
+        } else {
+            txtBrand.text = lines.joinToString("\n")
+            txtBrand.setTextColor(getColor(R.color.text))
+        }
+    }
+
+    /** Grab a frame of the chosen video so the previews show the real picture. */
+    private fun loadVideoFrame(uri: Uri?) {
+        if (uri == videoFrameOf) return
+        videoFrameOf = uri
+        if (uri == null) {
+            videoFrame = null
+            brandThumb.frame = null
+            brandSheet?.setFrame(null)
+            return
+        }
+        thread {
+            val b = BrandPreviewView.grabFrame(this, uri)
+            runOnUiThread {
+                if (videoFrameOf != uri || isFinishing) return@runOnUiThread
+                videoFrame = b
+                brandThumb.frame = b
+                brandSheet?.setFrame(b)
+                refreshBrandCard()
+            }
+        }
     }
 
     // ---------------------------------------------------------------- run
@@ -473,6 +550,8 @@ class MainActivity : Activity() {
         const val REQ_SRT = 4
         const val REQ_STORAGE = 2
         const val REQ_NOTIFY = 3
+        const val REQ_LOGO = 5
+        const val REQ_LT_PIC = 6
     }
 }
 

@@ -7,6 +7,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import org.json.JSONObject
@@ -191,20 +192,51 @@ class DubEngine(
             step("Putting Khmer voice into video", f)
         }
 
-        // 6. save
+        // 6. logo + lower third (the picture is re-made, so this takes longer)
+        var finalVideo = outTmp
+        val brand = Brand.load(ctx)
+        if (brand.active(ctx)) {
+            val branded = File(work, "branded.mp4")
+            val t0 = System.currentTimeMillis()
+            try {
+                BrandExport.run(ctx, outTmp, branded, brand, info.durationMs, cancelled) { f ->
+                    step("Adding logo & lower third  ${(f * 100).toInt()}%", f)
+                }
+                finalVideo = branded
+                val what = listOfNotNull(
+                    "logo".takeIf { brand.hasLogo(ctx) },
+                    "lower third".takeIf { brand.hasLowerThird(ctx) },
+                ).joinToString(" + ")
+                log("Added $what in ${fmt(System.currentTimeMillis() - t0)}")
+            } catch (e: CancelledException) {
+                throw e
+            } catch (e: Exception) {
+                log("! Could not add logo / lower third (${e.message}). Saved without them.")
+            }
+            checkCancel()
+        }
+
+        // 7. save
         step("Saving", 1f)
         val name = "${stem}_KH"
-        val videoUri = Output.saveVideo(ctx, outTmp, "$name.mp4")
+        val videoUri = Output.saveVideo(ctx, finalVideo, "$name.mp4")
         val srtPath = Output.saveText(ctx, Srt.write(cues, withTags = true), "$name.srt")
         work.deleteRecursively()
         val savedName = Output.actualName(ctx, videoUri, "$name.mp4")
         return DubResult(videoUri, "Movies/${Output.FOLDER}/$savedName", srtPath)
     }
 
+    /** One lock per clip, so two lines with the same words don't make (and delete) the same files at once. */
+    private val clipLocks = ConcurrentHashMap<String, Any>()
+
     private fun makeClip(dir: File, text: String, voice: String, ratePct: Int): Clip {
         val rate = (if (ratePct >= 0) "+" else "") + "$ratePct%"
         val pitch = s.pitch
         val key = sha1("$voice|$rate|$pitch|$text").take(20)
+        synchronized(clipLocks.getOrPut(key) { Any() }) { return makeClipLocked(dir, key, text, voice, rate, pitch) }
+    }
+
+    private fun makeClipLocked(dir: File, key: String, text: String, voice: String, rate: String, pitch: String): Clip {
         val pcm = File(dir, "$key.pcm")
         if (pcm.exists()) return Clip(pcm, (pcm.length() / 2).toInt())
         val mp3 = File(dir, "$key.mp3")

@@ -48,6 +48,21 @@ Everything else is in **⚙ Settings** (top right): speed, pitch, voice volume, 
 original sound, translate, skip songs, and **Lines made at once**. It makes 16 lines at the same
 time by default, which is the fastest. Lower it if your internet is slow or lines fail.
 
+### Logo & Lower third
+Tap the **Logo & Lower third** card to put your brand on every dubbed video:
+- **Logo**: choose a picture (PNG with a see-through background looks best). Set its size and opacity,
+  or make it round.
+- **Lower third**: type your page name (Khmer works) and an optional second line, then pick a colour.
+  You can also use your own picture made in Canva. It slides in every few minutes (you choose how often
+  and for how long), or stays on all the time.
+- **Landscape 16:9 / Vertical 9:16**: each shape keeps its own places and sizes. Every video uses the one
+  that fits it.
+- **Position**: tap a spot on the 3×3 pad, or drag the logo or lower third in the preview.
+
+With a logo or lower third, saving takes longer because the picture is re-made (46 s for a
+2-minute 720p video on the Mac's test phone; real phones with a hardware encoder are usually faster). If a phone can't re-make a video, it's saved without them and
+the log says why.
+
 **Stop** stops after the current step. **Start** again continues where it stopped
 (translation and finished voice lines are kept).
 

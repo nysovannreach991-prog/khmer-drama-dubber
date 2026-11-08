@@ -67,5 +67,9 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // re-encodes the picture when a logo or lower third is added
+    implementation("androidx.media3:media3-transformer:1.9.4")
+    implementation("androidx.media3:media3-effect:1.9.4")
+    implementation("androidx.media3:media3-common:1.9.4")
     testImplementation("junit:junit:4.13.2")
 }
