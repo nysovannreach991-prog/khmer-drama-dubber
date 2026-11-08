@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -15,11 +16,10 @@ import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
-import android.widget.CheckBox
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.RadioButton
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -33,12 +33,13 @@ class MainActivity : Activity() {
     private var player: MediaPlayer? = null
 
     private lateinit var txtPairs: TextView
-    private lateinit var btnPick: Button
-    private lateinit var btnClear: Button
+    private lateinit var btnVideo: Button
+    private lateinit var btnSubtitle: Button
+    private lateinit var btnClear: TextView
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var btnPlay: Button
-    private lateinit var btnPreview: Button
+    private lateinit var btnPreview: ImageButton
     private lateinit var cardProgress: LinearLayout
     private lateinit var txtStatus: TextView
     private lateinit var txtDetail: TextView
@@ -50,11 +51,12 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        applyInsets()
+        edgeToEdge()
         settings = Settings.load(this)
 
         txtPairs = findViewById(R.id.txtPairs)
-        btnPick = findViewById(R.id.btnPick)
+        btnVideo = findViewById(R.id.btnVideo)
+        btnSubtitle = findViewById(R.id.btnSubtitle)
         btnClear = findViewById(R.id.btnClear)
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
@@ -66,9 +68,10 @@ class MainActivity : Activity() {
         txtLog = findViewById(R.id.txtLog)
         progress = findViewById(R.id.progress)
 
-        setupSettings()
+        setupVoice()
 
-        btnPick.setOnClickListener { pickFiles() }
+        btnVideo.setOnClickListener { pick(video = true) }
+        btnSubtitle.setOnClickListener { pick(video = false) }
         btnClear.setOnClickListener { picked.clear(); updatePairs() }
         btnStart.setOnClickListener { start() }
         btnStop.setOnClickListener {
@@ -77,15 +80,18 @@ class MainActivity : Activity() {
         }
         btnPlay.setOnClickListener { playResult() }
         btnPreview.setOnClickListener { previewVoice() }
-
-        findViewById<TextView>(R.id.txtVersion).text = "Version ${Updater.currentVersion}"
-        val btnCheck = findViewById<Button>(R.id.btnCheckUpdate)
-        if (Updater.enabled) {
-            btnCheck.setOnClickListener { checkForUpdate(manual = true) }
-            if (savedInstanceState == null) checkForUpdate(manual = false)
-        } else {
-            btnCheck.visibility = View.GONE
+        findViewById<View>(R.id.btnSettings).setOnClickListener {
+            SettingsSheet(
+                this, settings,
+                onCheckUpdate = if (Updater.enabled) ({ checkForUpdate(manual = true) }) else null,
+                onShowGuide = { showGuide() },
+            ).show()
         }
+        val prefs = getSharedPreferences("app", MODE_PRIVATE)
+        if (savedInstanceState == null && !prefs.getBoolean("guideDone", false)) {
+            findViewById<View>(R.id.content).post { showGuide() }
+        }
+        if (Updater.enabled && savedInstanceState == null) checkForUpdate(manual = false)
 
         savedInstanceState?.let { b ->
             val uris = b.getStringArrayList("uris") ?: return@let
@@ -118,14 +124,53 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
+    // ---------------------------------------------------------------- first-use guide
+
+    private fun showGuide() {
+        val root = findViewById<android.view.ViewGroup>(android.R.id.content)
+        if (root.findViewWithTag<View>("guide") != null) return
+        val steps = listOf(
+            GuideOverlay.Step(btnVideo, "ចុចទីនេះ ដើម្បីជ្រើសរើសវីដេអូ"),
+            GuideOverlay.Step(btnSubtitle, "ជ្រើសរើសឯកសារអក្សររត់ (.srt)\nរបស់វីដេអូនោះ"),
+            GuideOverlay.Step(findViewById(R.id.rgVoice), "ជ្រើសរើសសំឡេង ស្រី ឬ ប្រុស"),
+            GuideOverlay.Step(btnPreview, "ចុចទីនេះ ដើម្បីស្តាប់សំឡេងសាកល្បង"),
+            GuideOverlay.Step(btnStart, "ចុចចាប់ផ្តើម! រួចរង់ចាំបន្តិច\nវីដេអូរួចរាល់នៅក្នុង\nMovies/KhmerDubber"),
+            GuideOverlay.Step(findViewById(R.id.btnSettings), "ការកំណត់ផ្សេងៗ នៅទីនេះ\n(ល្បឿន សំឡេង ...)"),
+        )
+        val guide = GuideOverlay(this, steps, findViewById(R.id.scroll)) {
+            getSharedPreferences("app", MODE_PRIVATE).edit().putBoolean("guideDone", true).apply()
+        }
+        guide.tag = "guide"
+        root.addView(guide, android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        val guide = findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<GuideOverlay>("guide")
+        if (guide != null) guide.finish() else @Suppress("DEPRECATION") super.onBackPressed()
+    }
+
     // ---------------------------------------------------------------- layout
 
-    private fun applyInsets() {
-        val header = findViewById<View>(R.id.header)
+    /** Draw behind the status and navigation bars so the gradient fills the screen. */
+    private fun edgeToEdge() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = Color.TRANSPARENT
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+
         val content = findViewById<View>(R.id.content)
-        val top0 = header.paddingTop
+        val top0 = content.paddingTop
         val bottom0 = content.paddingBottom
-        findViewById<View>(R.id.scroll).setOnApplyWindowInsetsListener { v, insets ->
+        findViewById<View>(R.id.scroll).setOnApplyWindowInsetsListener { _, insets ->
             val top: Int
             val bottom: Int
             if (Build.VERSION.SDK_INT >= 30) {
@@ -137,90 +182,70 @@ class MainActivity : Activity() {
                 @Suppress("DEPRECATION")
                 bottom = insets.systemWindowInsetBottom
             }
-            header.setPadding(header.paddingLeft, top0 + top, header.paddingRight, header.paddingBottom)
-            content.setPadding(content.paddingLeft, content.paddingTop, content.paddingRight, bottom0 + bottom)
+            content.setPadding(content.paddingLeft, top0 + top, content.paddingRight, bottom0 + bottom)
+            val scrim = findViewById<View>(R.id.statusScrim)
+            scrim.layoutParams = scrim.layoutParams.apply { height = top + (16 * resources.displayMetrics.density).toInt() }
             insets
         }
     }
 
-    private fun setupSettings() {
+    private fun setupVoice() {
         val rbFemale = findViewById<RadioButton>(R.id.rbFemale)
         val rbMale = findViewById<RadioButton>(R.id.rbMale)
         if (settings.voice == "male") rbMale.isChecked = true else rbFemale.isChecked = true
         rbFemale.setOnCheckedChangeListener { _, c -> if (c) { settings.voice = "female"; settings.save(this) } }
         rbMale.setOnCheckedChangeListener { _, c -> if (c) { settings.voice = "male"; settings.save(this) } }
-
-        val lblRate = findViewById<TextView>(R.id.lblRate)
-        val sbRate = findViewById<SeekBar>(R.id.sbRate)
-        fun showRate() {
-            val r = settings.ratePct
-            lblRate.text = "Voice speed:  ${if (r >= 0) "+" else ""}$r%" + if (r == 0) "  (normal)" else ""
-        }
-        sbRate.progress = settings.ratePct + 20
-        showRate()
-        sbRate.onChange { p -> settings.ratePct = p - 20; showRate() }
-
-        val lblMax = findViewById<TextView>(R.id.lblMax)
-        val sbMax = findViewById<SeekBar>(R.id.sbMax)
-        fun showMax() {
-            lblMax.text = if (settings.maxSpeed <= 1.0f) "Speed up long lines:  off"
-            else "Speed up long lines:  up to %.1f×".format(settings.maxSpeed)
-        }
-        sbMax.progress = Math.round(settings.maxSpeed * 10) - 10
-        showMax()
-        sbMax.onChange { p -> settings.maxSpeed = 1f + p / 10f; showMax() }
-
-        val lblOrig = findViewById<TextView>(R.id.lblOrig)
-        val sbOrig = findViewById<SeekBar>(R.id.sbOrig)
-        fun showOrig() {
-            val v = settings.originalVolume
-            lblOrig.text = "Original video sound:  $v%" + if (v == 0) "  (removed)" else ""
-        }
-        sbOrig.progress = settings.originalVolume
-        showOrig()
-        sbOrig.onChange { p -> settings.originalVolume = p; showOrig() }
-
-        findViewById<CheckBox>(R.id.cbDuck).apply {
-            isChecked = settings.duckOriginal
-            setOnCheckedChangeListener { _, c -> settings.duckOriginal = c; settings.save(this@MainActivity) }
-        }
-        findViewById<CheckBox>(R.id.cbTranslate).apply {
-            isChecked = settings.translate
-            setOnCheckedChangeListener { _, c -> settings.translate = c; settings.save(this@MainActivity) }
-        }
-        findViewById<CheckBox>(R.id.cbSongs).apply {
-            isChecked = settings.skipSongs
-            setOnCheckedChangeListener { _, c -> settings.skipSongs = c; settings.save(this@MainActivity) }
-        }
-    }
-
-    private fun SeekBar.onChange(f: (Int) -> Unit) {
-        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) = f(p)
-            override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) = settings.save(this@MainActivity)
-        })
     }
 
     // ---------------------------------------------------------------- files
 
-    private fun pickFiles() {
+    /** Opens the file picker showing only videos, or only .srt subtitles. */
+    private fun pick(video: Boolean) {
         val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
             .addCategory(Intent.CATEGORY_OPENABLE)
-            .setType("*/*")
             .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        startActivityForResult(i, REQ_PICK)
+        if (video) {
+            i.type = "video/*"
+        } else {
+            val types = mutableListOf("application/x-subrip", "text/x-srt", "text/srt", "application/srt", "text/x-subrip")
+            // Android 9 and older don't know .srt and call it a generic file
+            if (Build.VERSION.SDK_INT < 29) types.add("application/octet-stream")
+            i.type = "*/*"
+            i.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+        }
+        startActivityForResult(i, if (video) REQ_VIDEO else REQ_SRT)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQ_PICK || resultCode != RESULT_OK || data == null) return
+        if (requestCode != REQ_VIDEO && requestCode != REQ_SRT) return
+        if (resultCode != RESULT_OK || data == null) return
+        val wantVideo = requestCode == REQ_VIDEO
         val uris = mutableListOf<Uri>()
         data.clipData?.let { c -> for (k in 0 until c.itemCount) uris.add(c.getItemAt(k).uri) }
         data.data?.let { if (it !in uris) uris.add(it) }
+
+        val chosen = LinkedHashMap<Uri, Pair<String, String?>>()
+        val wrong = mutableListOf<String>()
         for (u in uris) {
+            val name = displayName(u)
+            val mime = contentResolver.getType(u)
+            val ok = if (wantVideo) Pairing.isVideo(name, mime) else Pairing.isSrt(name)
+            if (ok) chosen[u] = name to mime else wrong.add(name)
+        }
+        if (wrong.isNotEmpty()) {
+            toast("${wrong.joinToString()} is not ${if (wantVideo) "a video" else "a .srt subtitle"}")
+        }
+        if (chosen.isEmpty()) return
+        // One file picked while one of that kind is already there = replace it (single episode).
+        // Several files = add them (many episodes).
+        val sameKind = picked.filter { (_, v) ->
+            if (wantVideo) Pairing.isVideo(v.first, v.second) else Pairing.isSrt(v.first)
+        }.keys
+        if (chosen.size == 1 && sameKind.size == 1) picked.remove(sameKind.first())
+        for ((u, v) in chosen) {
             runCatching { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            picked[u] = displayName(u) to contentResolver.getType(u)
+            picked[u] = v
         }
         updatePairs()
     }
@@ -237,9 +262,22 @@ class MainActivity : Activity() {
     private fun updatePairs() {
         val r = Pairing.pair(picked)
         jobs = r.jobs
+        val videos = picked.values.filter { Pairing.isVideo(it.first, it.second) }.map { it.first }
+        val srts = picked.values.filter { Pairing.isSrt(it.first) }.map { it.first }
+        btnVideo.text = when (videos.size) {
+            0 -> "🎬   Choose video"
+            1 -> "🎬   ${videos[0]}"
+            else -> "🎬   ${videos.size} videos"
+        }
+        btnSubtitle.text = when (srts.size) {
+            0 -> "📝   Choose subtitle (.srt)"
+            1 -> "📝   ${srts[0]}"
+            else -> "📝   ${srts.size} subtitles"
+        }
         if (picked.isEmpty()) {
-            txtPairs.text = "No files yet"
-            txtPairs.setTextColor(getColor(R.color.muted))
+            txtPairs.text = "Many episodes? Same names: ep01.mp4 + ep01.srt"
+            txtPairs.setTextColor(getColor(R.color.text3))
+            render(DubBus.state)
             return
         }
         val sb = SpannableStringBuilder()
@@ -249,10 +287,13 @@ class MainActivity : Activity() {
             sb.append(text)
             sb.setSpan(ForegroundColorSpan(getColor(color)), s, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        r.jobs.forEach { line("✓  ${it.videoName}  +  ${it.srtName}", R.color.ok) }
-        r.lonelyVideos.forEach { line("⚠  $it  — no .srt yet", R.color.warn) }
-        r.lonelySrts.forEach { line("⚠  $it  — no video yet", R.color.warn) }
-        r.others.forEach { line("✗  $it  — not a video or .srt", R.color.muted) }
+        if (r.jobs.size == 1 && r.lonelyVideos.isEmpty() && r.lonelySrts.isEmpty()) {
+            line("✓  Ready", R.color.ok)
+        } else {
+            r.jobs.forEach { line("✓  ${it.videoName}  +  ${it.srtName}", R.color.ok) }
+        }
+        r.lonelyVideos.forEach { line("⚠  $it — choose its subtitle", R.color.warn) }
+        r.lonelySrts.forEach { line("⚠  $it — choose its video", R.color.warn) }
         txtPairs.setTextColor(getColor(R.color.text))
         txtPairs.text = sb
         render(DubBus.state)
@@ -312,8 +353,10 @@ class MainActivity : Activity() {
             jobs.size > 1 -> "Start dubbing ${jobs.size} videos"
             else -> "Start dubbing"
         }
-        btnPick.isEnabled = !s.running
+        btnVideo.isEnabled = !s.running
+        btnSubtitle.isEnabled = !s.running
         btnClear.isEnabled = !s.running
+        btnClear.visibility = if (picked.isEmpty()) View.GONE else View.VISIBLE
         btnStop.visibility = if (s.running) View.VISIBLE else View.GONE
         btnPlay.visibility = if (!s.running && s.lastVideo != null) View.VISIBLE else View.GONE
     }
@@ -330,24 +373,27 @@ class MainActivity : Activity() {
 
     private fun previewVoice() {
         btnPreview.isEnabled = false
-        btnPreview.text = "Loading…"
+        btnPreview.alpha = 0.4f
         val voice = settings.voiceName()
-        val rate = (if (settings.ratePct >= 0) "+" else "") + "${settings.ratePct}%"
+        val rate = settings.rate
+        val pitch = settings.pitch
+        val volume = (settings.dubVolume / 100f).coerceAtMost(1f)
         thread {
             val result = runCatching {
                 val bytes = EdgeTts.synthesize(
-                    "សួស្តី! នេះគឺជាសំឡេងខ្មែរ សម្រាប់បញ្ចូលសំឡេងរឿង។", voice, rate, "+0Hz"
+                    "សួស្តី! នេះគឺជាសំឡេងខ្មែរ សម្រាប់បញ្ចូលសំឡេងរឿង។", voice, rate, pitch
                 )
                 File(cacheDir, "preview.mp3").apply { writeBytes(bytes) }
             }
             runOnUiThread {
                 btnPreview.isEnabled = true
-                btnPreview.text = "▶  Listen to voice"
+                btnPreview.alpha = 1f
                 result.onSuccess { f ->
                     player?.release()
                     player = MediaPlayer().apply {
                         setDataSource(f.path)
                         prepare()
+                        setVolume(volume, volume)
                         start()
                     }
                 }.onFailure { toast("Could not load voice: ${it.message}. Check your internet.") }
@@ -423,7 +469,8 @@ class MainActivity : Activity() {
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 
     companion object {
-        const val REQ_PICK = 1
+        const val REQ_VIDEO = 1
+        const val REQ_SRT = 4
         const val REQ_STORAGE = 2
         const val REQ_NOTIFY = 3
     }
@@ -443,6 +490,9 @@ object Pairing {
     )
 
     private fun ext(n: String) = n.substringAfterLast('.', "").lowercase()
+    fun isSrt(name: String) = ext(name) == "srt"
+    fun isVideo(name: String, mime: String?) =
+        !isSrt(name) && (ext(name) in VIDEO_EXTS || mime?.startsWith("video/") == true)
     private fun stem(n: String) = n.substringBeforeLast('.', n)
 
     private val natural = Comparator<String> { a, b ->

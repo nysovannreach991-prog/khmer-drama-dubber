@@ -8,6 +8,8 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.ceil
 
@@ -27,9 +29,25 @@ class DubEngine(
     private val step: (label: String, fraction: Float) -> Unit,
     private val log: (String) -> Unit,
 ) {
-    private class Clip(val pcm: File, val samples: Int)
+    private class Clip(val pcm: File, val samples: Int) {
+        val ms: Long get() = samples * 1000L / AudioIO.TTS_RATE
+    }
 
     private val sr = AudioIO.TTS_RATE.toLong()
+
+    /** MP3 decoding uses the phone's media codecs; keep only a few at once. */
+    private val decodeGate = Semaphore(4)
+
+    /** How long the voice takes per character, learned from finished lines. */
+    private class Pace {
+        private var sum = 0.0
+        private var n = 0
+        @Synchronized fun add(msPerChar: Double) { sum += msPerChar; n++ }
+        @Synchronized fun get(): Double? = if (n >= 3) sum / n else null
+    }
+
+    /** edge-tts rate "+60%" = 1.6x speed, and speed is exactly linear. */
+    private fun pctOf(speed: Double) = ceil((speed - 1) * 100 - 1e-9).toInt()
 
     private fun checkCancel() {
         if (cancelled()) throw CancelledException()
@@ -63,40 +81,73 @@ class DubEngine(
             log("Translated ${cues.size} lines to Khmer")
         }
 
-        // 2. voice for every line
+        // 2+3. voice for every line, at a speed that fits its subtitle time.
+        // Many lines are made at once. The speed is guessed from lines already done,
+        // so most lines are made only once; if the guess was short, the line is made
+        // again at the exact speed (edge-tts speed is linear).
         val speak = cues.indices.filter { i ->
             val c = cues[i]
             c.start < info.durationMs && Srt.isSpeakable(c.km) && !(s.skipSongs && Srt.isSong(c.text))
         }
         if (speak.isEmpty()) throw IOException("no lines to speak")
-        val clips = arrayOfNulls<Clip>(cues.size)
-        runParallel(speak, "Making Khmer voice") { i ->
-            clips[i] = makeClip(ttsDir, cues[i].km, s.voiceName(cues[i].voice), s.ratePct)
-        }
-
-        // 3. lines longer than their time are spoken again, faster (edge-tts rate is exact)
         fun slotEndMs(k: Int): Long {
             val c = cues[speak[k]]
             val next = if (k + 1 < speak.size) cues[speak[k + 1]].start else info.durationMs
             return maxOf(c.end, next)
         }
-        val faster = HashMap<Int, Int>()
-        for ((k, i) in speak.withIndex()) {
-            val clip = clips[i] ?: continue
+        val slotMs = LongArray(cues.size)
+        for ((k, i) in speak.withIndex()) slotMs[i] = maxOf(1L, slotEndMs(k) - cues[i].start)
+
+        val baseSpeed = 1 + s.ratePct / 100.0
+        val maxSpeed = baseSpeed * s.maxSpeed
+        val pace = Pace()
+        val clips = arrayOfNulls<Clip>(cues.size)
+        val finalRate = IntArray(cues.size) { s.ratePct }
+        // remember each line's speed so a stopped job resumes from the saved voice files
+        val rateFile = File(work, "rates.json")
+        val savedRates = HashMap<String, Int>()
+        if (rateFile.exists()) runCatching {
+            val o = JSONObject(rateFile.readText())
+            o.keys().forEach { savedRates[it] = o.getInt(it) }
+        }
+        fun lineKey(i: Int) = sha1("${s.voiceName(cues[i].voice)}|${s.ratePct}|${s.maxSpeed}|${slotMs[i]}|${cues[i].km}")
+
+        val voiceStart = System.currentTimeMillis()
+        runParallel(speak, "Making Khmer voice") { i ->
             val c = cues[i]
-            val slotMs = maxOf(1L, slotEndMs(k) - c.start)
-            val lenMs = clip.samples * 1000L / sr
-            if (lenMs > slotMs + 50) {
-                val factor = minOf(lenMs.toDouble() / slotMs * 1.03, s.maxSpeed.toDouble())
-                val rate = ceil(((1 + s.ratePct / 100.0) * factor - 1) * 100).toInt()
-                if (rate > s.ratePct) faster[i] = rate
+            val voice = s.voiceName(c.voice)
+            val slot = slotMs[i]
+            val key = lineKey(i)
+            val known = synchronized(savedRates) { savedRates[key] }
+            if (known != null) {
+                clips[i] = makeClip(ttsDir, c.km, voice, known)
+                finalRate[i] = known
+                return@runParallel
+            }
+            val chars = c.km.length.coerceAtLeast(1)
+            var speed = baseSpeed
+            pace.get()?.let { msPerChar ->
+                val guessMs = msPerChar * chars
+                if (guessMs > slot) speed = minOf(maxSpeed, baseSpeed * guessMs / slot)
+            }
+            var clip = makeClip(ttsDir, c.km, voice, pctOf(speed))
+            pace.add(clip.ms * speed / baseSpeed / chars)
+            if (clip.ms > slot + 50) {
+                val need = minOf(maxSpeed, speed * clip.ms / slot * 1.03)
+                if (need > speed * 1.02) {
+                    speed = need
+                    clip = makeClip(ttsDir, c.km, voice, pctOf(speed))
+                }
+            }
+            clips[i] = clip
+            finalRate[i] = pctOf(speed)
+            synchronized(savedRates) {
+                savedRates[key] = finalRate[i]
+                rateFile.writeText(JSONObject(savedRates as Map<*, *>).toString())
             }
         }
-        if (faster.isNotEmpty()) {
-            runParallel(faster.keys.sorted(), "Speeding up long lines") { i ->
-                clips[i] = makeClip(ttsDir, cues[i].km, s.voiceName(cues[i].voice), faster.getValue(i))
-            }
-        }
+        val voiceEnd = System.currentTimeMillis()
+        val faster = speak.count { finalRate[it] > s.ratePct }
 
         // 4. one voice track that follows the subtitle times
         step("Syncing voice to subtitles", 0f)
@@ -127,8 +178,9 @@ class DubEngine(
             val total = info.durationMs * sr / 1000
             if (cursor < total) silence(total - cursor)
         }
-        var msg = "$placed lines voiced"
-        if (faster.isNotEmpty()) msg += ", ${faster.size} sped up to fit"
+        val voiceSecs = (voiceEnd - voiceStart) / 1000.0
+        var msg = "$placed lines voiced in %.1fs (%d at once)".format(voiceSecs, s.parallel)
+        if (faster > 0) msg += ", $faster sped up to fit"
         if (late > 0) msg += ", $late still long (start a bit late)"
         log(msg)
         checkCancel()
@@ -151,7 +203,8 @@ class DubEngine(
 
     private fun makeClip(dir: File, text: String, voice: String, ratePct: Int): Clip {
         val rate = (if (ratePct >= 0) "+" else "") + "$ratePct%"
-        val key = sha1("$voice|$rate|+0Hz|$text").take(20)
+        val pitch = s.pitch
+        val key = sha1("$voice|$rate|$pitch|$text").take(20)
         val pcm = File(dir, "$key.pcm")
         if (pcm.exists()) return Clip(pcm, (pcm.length() / 2).toInt())
         val mp3 = File(dir, "$key.mp3")
@@ -160,7 +213,7 @@ class DubEngine(
             for (attempt in 0 until 4) {
                 checkCancel()
                 try {
-                    val bytes = EdgeTts.synthesize(text, voice, rate, "+0Hz")
+                    val bytes = EdgeTts.synthesize(text, voice, rate, pitch)
                     val part = File(mp3.path + ".part")
                     part.writeBytes(bytes)
                     part.renameTo(mp3)
@@ -173,13 +226,14 @@ class DubEngine(
             }
             if (last != null) throw last
         }
-        val n = AudioIO.mp3ToPcm(mp3, pcm)
+        decodeGate.acquire()
+        val n = try { AudioIO.mp3ToPcm(mp3, pcm) } finally { decodeGate.release() }
         mp3.delete()
         return Clip(pcm, n)
     }
 
     private fun runParallel(items: List<Int>, label: String, work: (Int) -> Unit) {
-        val pool = Executors.newFixedThreadPool(4)
+        val pool = Executors.newFixedThreadPool(s.parallel.coerceIn(1, 32))
         val done = AtomicInteger(0)
         val failed = AtomicInteger(0)
         var firstError: String? = null

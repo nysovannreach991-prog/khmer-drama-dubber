@@ -177,7 +177,7 @@ object VideoMixer {
             val pcm = ByteBuffer.allocate(chunk * 4).order(ByteOrder.LITTLE_ENDIAN)
             var origEnded = orig == null
             val origVol = s.originalVolume / 100f
-            val dubVol = 1f
+            val dubVol = s.dubVolume / 100f
             val duck = s.duckOriginal
             val duckGain = 0.12f
             val holdFrames = outRate / 4

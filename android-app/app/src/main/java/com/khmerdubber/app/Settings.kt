@@ -10,7 +10,21 @@ class Settings(
     var duckOriginal: Boolean = true,  // lower original audio under the Khmer voice
     var translate: Boolean = true,     // translate to Khmer (skipped if already Khmer)
     var skipSongs: Boolean = true,     // don't speak ♪ lines
+    var pitchHz: Int = 0,              // voice pitch, -20..+20 Hz
+    var dubVolume: Int = 100,          // Khmer voice volume, 50..200 %
+    var parallel: Int = 16,            // voice lines made at the same time
 ) {
+    val rate: String get() = (if (ratePct >= 0) "+" else "") + "$ratePct%"
+    val pitch: String get() = (if (pitchHz >= 0) "+" else "") + "${pitchHz}Hz"
+
+    /** Back to defaults (keeps the chosen voice). */
+    fun reset() {
+        val d = Settings()
+        ratePct = d.ratePct; maxSpeed = d.maxSpeed; originalVolume = d.originalVolume
+        duckOriginal = d.duckOriginal; translate = d.translate; skipSongs = d.skipSongs
+        pitchHz = d.pitchHz; dubVolume = d.dubVolume; parallel = d.parallel
+    }
+
     fun voiceName(tag: String = ""): String =
         when (tag.ifEmpty { voice }) { "male" -> EdgeTts.MALE; else -> EdgeTts.FEMALE }
 
@@ -23,6 +37,9 @@ class Settings(
             .putBoolean("duck", duckOriginal)
             .putBoolean("translate", translate)
             .putBoolean("skipSongs", skipSongs)
+            .putInt("pitch", pitchHz)
+            .putInt("dubVol", dubVolume)
+            .putInt("parallel", parallel)
             .apply()
     }
 
@@ -40,6 +57,9 @@ class Settings(
                 duckOriginal = p.getBoolean("duck", d.duckOriginal),
                 translate = p.getBoolean("translate", d.translate),
                 skipSongs = p.getBoolean("skipSongs", d.skipSongs),
+                pitchHz = p.getInt("pitch", d.pitchHz),
+                dubVolume = p.getInt("dubVol", d.dubVolume),
+                parallel = p.getInt("parallel", d.parallel),
             )
         }
     }

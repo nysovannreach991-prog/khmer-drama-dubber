@@ -1,5 +1,6 @@
 package com.khmerdubber.app
 
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -31,6 +32,7 @@ object EdgeTts {
             "Chrome/$CHROMIUM_MAJOR.0.0.0 Safari/537.36 Edg/$CHROMIUM_MAJOR.0.0.0"
 
     private val client = OkHttpClient.Builder()
+        .dispatcher(Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 64 })
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(40, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)

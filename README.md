@@ -33,13 +33,20 @@ There are two versions. Use the **app** unless you have a reason not to.
 3. Android may warn that the app is from an unknown developer. Tap **Install anyway** (it's your own app).
 
 ## Use
-1. **Add files**: pick the video **and** its `.srt` (same name, e.g. `ep01.mp4` + `ep01.srt`).
-   Pick many episodes at once if you want. Green ✓ lines show the pairs it found.
-2. Choose the voice (**Listen to voice** plays a sample), speed and original-sound level.
+The first time you open the app, a short Khmer guide (steps ១–៦) shows you what to tap.
+You can open it again from **⚙ Settings → របៀបប្រើ · How to use**.
+
+1. Tap **Choose video**, then **Choose subtitle (.srt)**. Each button only shows that kind of file.
+   For many episodes, pick several of each with matching names (`ep01.mp4` + `ep01.srt`).
+2. Choose the voice, **Sreymom ♀** or **Piseth ♂**. ▶ plays a sample.
 3. Tap **Start dubbing**. You can leave the app; progress shows in the notification.
 4. Results:
    - Dubbed videos: **Movies/KhmerDubber** (they show up in the Gallery)
    - Khmer subtitles: **Download/KhmerDubber**
+
+Everything else is in **⚙ Settings** (top right): speed, pitch, voice volume, fitting long lines,
+original sound, translate, skip songs, and **Lines made at once**. It makes 16 lines at the same
+time by default, which is the fastest. Lower it if your internet is slow or lines fail.
 
 **Stop** stops after the current step. **Start** again continues where it stopped
 (translation and finished voice lines are kept).
@@ -143,7 +150,7 @@ Edit `Internal storage/KhmerDubber/config.json`:
 | `source_language` | `"auto"` | Language of your .srt: `"auto"`, `"zh-CN"`, `"en"`, `"th"`, `"ko"`… |
 | `embed_subtitles` | `false` | Also put the Khmer subtitles inside the video (can be turned on/off in the player) |
 | `skip_songs` | `true` | Don't speak lines with ♪ (song lyrics) |
-| `workers` | `4` | Lines voiced at the same time. Lower it if you get many errors |
+| `workers` | `16` | Lines voiced at the same time (16 is fastest). Lower it if you get many errors |
 
 You can also change settings for one run:
 

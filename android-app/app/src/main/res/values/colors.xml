@@ -1,18 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#1E3A8A</color>
-    <color name="primary_light">#3B5BDB</color>
-    <color name="primary_dark">#14285F</color>
-    <color name="accent">#F59E0B</color>
-    <color name="accent_pressed">#D97706</color>
-    <color name="disabled">#CBD5E1</color>
-    <color name="bg">#F1F5F9</color>
-    <color name="card">#FFFFFF</color>
-    <color name="line">#E2E8F0</color>
-    <color name="text">#0F172A</color>
-    <color name="muted">#64748B</color>
-    <color name="ok">#15803D</color>
-    <color name="warn">#B45309</color>
-    <color name="log_bg">#0F172A</color>
-    <color name="log_text">#E2E8F0</color>
+    <!-- background -->
+    <color name="bg_top">#0B1026</color>
+    <color name="bg_mid">#1E1B4B</color>
+    <color name="bg_bottom">#0F172A</color>
+    <!-- glass -->
+    <color name="glass_hi">#24FFFFFF</color>
+    <color name="glass_lo">#0FFFFFFF</color>
+    <color name="glass_line">#33FFFFFF</color>
+    <!-- text -->
+    <color name="text">#FFFFFF</color>
+    <color name="text2">#B8FFFFFF</color>
+    <color name="text3">#80FFFFFF</color>
+    <!-- accents -->
+    <color name="violet">#8B5CF6</color>
+    <color name="cyan">#06B6D4</color>
+    <color name="accent">#A78BFA</color>
+    <color name="ok">#4ADE80</color>
+    <color name="warn">#FBBF24</color>
+    <color name="ink">#1E1B4B</color>
+    <!-- kept for older references -->
+    <color name="primary">#1E1B4B</color>
+    <color name="muted">#B8FFFFFF</color>
 </resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- deep gradient with soft colour glows behind the glass -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <gradient android:angle="270" android:startColor="@color/bg_top"
+                android:centerColor="@color/bg_mid" android:endColor="@color/bg_bottom" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient android:type="radial" android:centerX="0.05" android:centerY="0.08"
+                android:gradientRadius="340dp" android:startColor="#B38B5CF6" android:endColor="#008B5CF6" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient android:type="radial" android:centerX="1.0" android:centerY="0.42"
+                android:gradientRadius="300dp" android:startColor="#8006B6D4" android:endColor="#0006B6D4" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient android:type="radial" android:centerX="0.1" android:centerY="0.92"
+                android:gradientRadius="320dp" android:startColor="#73EC4899" android:endColor="#00EC4899" />
+        </shape>
+    </item>
+</layer-list>

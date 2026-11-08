@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "source_language": "auto",  # language of the .srt ("auto", "zh-CN", "en"…)
     "embed_subtitles": False,   # add the Khmer .srt as a subtitle track
     "skip_songs": True,         # don't speak lines with ♪ (song lyrics)
-    "workers": 4,               # parallel edge-tts downloads
+    "workers": 16,              # parallel edge-tts downloads (16 = fastest without errors)
     "keep_work_files": False,   # keep the temp folder after success
 }
 
