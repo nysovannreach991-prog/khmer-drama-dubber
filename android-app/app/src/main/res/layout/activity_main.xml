@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- header -->
+        <LinearLayout
+            android:id="@+id/header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/primary"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="22dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="22dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Khmer Drama Dubber"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Video + .srt  →  Khmer voice (Edge TTS)"
+                android:textColor="#C7D2FE"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/txtVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="#93A5E8"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp">
+
+            <!-- update available -->
+            <LinearLayout
+                android:id="@+id/cardUpdate"
+                style="@style/Card"
+                android:background="@drawable/bg_card_update"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/txtUpdateTitle"
+                    style="@style/CardTitle"
+                    android:textColor="@color/ok" />
+
+                <TextView
+                    android:id="@+id/txtUpdateNotes"
+                    style="@style/Hint"
+                    android:textColor="@color/text" />
+
+                <Button
+                    android:id="@+id/btnUpdate"
+                    style="@style/BtnPrimary"
+                    android:layout_width="match_parent"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_btn_update"
+                    android:text="Update now" />
+            </LinearLayout>
+
+            <!-- 1. files -->
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="1.  Video &amp; subtitles" />
+
+                <TextView
+                    style="@style/Hint"
+                    android:text="Pick the video and its .srt file (same name, e.g. ep01.mp4 + ep01.srt). You can pick many episodes at once." />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnPick"
+                        style="@style/BtnSecondary"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="+  Add files" />
+
+                    <Button
+                        android:id="@+id/btnClear"
+                        style="@style/BtnSecondary"
+                        android:layout_width="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="Clear" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/txtPairs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:lineSpacingExtra="4dp"
+                    android:text="No files yet"
+                    android:textColor="@color/muted"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- 2. voice -->
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="2.  Khmer voice" />
+
+                <RadioGroup
+                    android:id="@+id/rgVoice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <RadioButton
+                        android:id="@+id/rbFemale"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Female\nSreymom"
+                        android:textSize="15sp" />
+
+                    <RadioButton
+                        android:id="@+id/rbMale"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Male\nPiseth"
+                        android:textSize="15sp" />
+                </RadioGroup>
+
+                <Button
+                    android:id="@+id/btnPreview"
+                    style="@style/BtnSecondary"
+                    android:layout_width="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="▶  Listen to voice" />
+
+                <TextView
+                    android:id="@+id/lblRate"
+                    style="@style/Label"
+                    android:text="Voice speed" />
+
+                <SeekBar
+                    android:id="@+id/sbRate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:max="70" />
+
+                <TextView
+                    android:id="@+id/lblMax"
+                    style="@style/Label"
+                    android:text="Speed up long lines" />
+
+                <SeekBar
+                    android:id="@+id/sbMax"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:max="10" />
+
+                <TextView
+                    style="@style/Hint"
+                    android:text="Khmer is often longer than the original. Lines that don't fit their subtitle time are spoken faster, up to this limit." />
+            </LinearLayout>
+
+            <!-- 3. sound -->
+            <LinearLayout style="@style/Card">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:text="3.  Sound &amp; text" />
+
+                <TextView
+                    android:id="@+id/lblOrig"
+                    style="@style/Label"
+                    android:layout_marginTop="8dp"
+                    android:text="Original video sound" />
+
+                <SeekBar
+                    android:id="@+id/sbOrig"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:max="100" />
+
+                <CheckBox
+                    android:id="@+id/cbDuck"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Make original sound quieter while Khmer voice speaks"
+                    android:textSize="15sp" />
+
+                <CheckBox
+                    android:id="@+id/cbTranslate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Translate subtitles to Khmer (skipped if already Khmer)"
+                    android:textSize="15sp" />
+
+                <CheckBox
+                    android:id="@+id/cbSongs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Don't speak song lyrics (lines with ♪)"
+                    android:textSize="15sp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnStart"
+                style="@style/BtnPrimary"
+                android:layout_width="match_parent"
+                android:layout_marginTop="18dp"
+                android:text="Start dubbing" />
+
+            <!-- progress -->
+            <LinearLayout
+                android:id="@+id/cardProgress"
+                style="@style/Card"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/txtStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/progress"
+                    style="@android:style/Widget.Material.ProgressBar.Horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:max="1000" />
+
+                <TextView
+                    android:id="@+id/txtDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/muted"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/txtLog"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_log"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="2dp"
+                    android:padding="12dp"
+                    android:textColor="@color/log_text"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnStop"
+                        style="@style/BtnSecondary"
+                        android:layout_width="wrap_content"
+                        android:text="■  Stop" />
+
+                    <Button
+                        android:id="@+id/btnPlay"
+                        style="@style/BtnSecondary"
+                        android:layout_width="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="▶  Play result" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                style="@style/Hint"
+                android:layout_marginTop="16dp"
+                android:gravity="center"
+                android:text="Dubbed videos: Movies/KhmerDubber\nKhmer subtitles: Download/KhmerDubber\nTip: start a subtitle line with [M] or [F] to choose a male or female voice for that line." />
+
+            <Button
+                android:id="@+id/btnCheckUpdate"
+                style="@style/BtnSecondary"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="14dp"
+                android:text="Check for updates" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

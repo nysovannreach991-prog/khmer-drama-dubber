@@ -1,0 +1,16 @@
+# builds and local files
+*.apk
+.DS_Store
+__pycache__/
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+# Python script test folders
+input/
+output/
+config.json
+# SECRET: signing key never goes to GitHub (it's stored as an encrypted secret instead)
+*.jks
+*.keystore
+keystore.properties

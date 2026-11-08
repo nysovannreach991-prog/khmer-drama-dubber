@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1E3A8A</color>
+    <color name="primary_light">#3B5BDB</color>
+    <color name="primary_dark">#14285F</color>
+    <color name="accent">#F59E0B</color>
+    <color name="accent_pressed">#D97706</color>
+    <color name="disabled">#CBD5E1</color>
+    <color name="bg">#F1F5F9</color>
+    <color name="card">#FFFFFF</color>
+    <color name="line">#E2E8F0</color>
+    <color name="text">#0F172A</color>
+    <color name="muted">#64748B</color>
+    <color name="ok">#15803D</color>
+    <color name="warn">#B45309</color>
+    <color name="log_bg">#0F172A</color>
+    <color name="log_text">#E2E8F0</color>
+</resources>
