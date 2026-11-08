@@ -1,5 +1,6 @@
 # builds and local files
 *.apk
+*.aab
 .DS_Store
 __pycache__/
 android-app/.gradle/

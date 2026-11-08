@@ -44,7 +44,7 @@ jobs:
       - name: Test and build
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --console=plain testReleaseUnitTest assembleRelease
+          ./gradlew --no-daemon --console=plain testGithubReleaseUnitTest assembleGithubRelease
 
       - name: Publish release
         env:
@@ -53,6 +53,6 @@ jobs:
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           NOTES=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
           APK="KhmerDubber-$GITHUB_REF_NAME.apk"
-          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          cp app/build/outputs/apk/github/release/app-github-release.apk "$APK"
           gh release create "$GITHUB_REF_NAME" "$APK" \
             --title "Khmer Dubber $GITHUB_REF_NAME" --notes "${NOTES:-Bug fixes and improvements}"

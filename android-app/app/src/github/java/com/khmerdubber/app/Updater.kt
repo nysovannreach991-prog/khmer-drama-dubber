@@ -14,7 +14,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Self-update from GitHub Releases.
+ * Self-update from GitHub Releases (GitHub build only; the Play build updates through Google Play).
  * The newest release of BuildConfig.UPDATE_REPO with an .apk attached is offered to the user.
  */
 object Updater {
@@ -54,17 +54,7 @@ object Updater {
     }
 
     /** "1.10" > "1.9", "1.2.1" > "1.2". */
-    fun isNewer(remote: String, local: String = currentVersion): Boolean {
-        fun parts(v: String) = v.split('.', '-').map { p -> p.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }
-        val r = parts(remote)
-        val l = parts(local)
-        for (i in 0 until maxOf(r.size, l.size)) {
-            val a = r.getOrElse(i) { 0 }
-            val b = l.getOrElse(i) { 0 }
-            if (a != b) return a > b
-        }
-        return false
-    }
+    fun isNewer(remote: String, local: String = currentVersion) = Versions.isNewer(remote, local)
 
     /** Download the APK into the cache folder. Blocking. */
     fun download(ctx: Context, rel: Release, progress: (Int) -> Unit): File {

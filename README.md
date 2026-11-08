@@ -93,6 +93,15 @@ The signing key is stored on GitHub as encrypted secrets (`KEYSTORE_B64`, `KEYST
 **Also keep `android-app/khmerdubber.jks` and `keystore.properties` safe on your computer.** Android
 only installs an update over the old app if it's signed with the same key.
 
+## Google Play
+The app is built two ways from the same code:
+- **github**: the sideloaded APK that updates itself from GitHub Releases (`./release.sh`).
+- **play**: for Google Play. No self-updater (Play doesn't allow it); Play installs updates.
+
+`./play-bundle.sh` builds the Play upload file `KhmerDubber-play-vX.Y.aab`.
+Everything needed to publish (store texts, graphics, form answers, privacy policy) is in
+[`play-store/`](play-store/PUBLISHING.md).
+
 ## Preview on this Mac
 Double-click **`Preview on Mac.command`**. It opens a virtual Android phone with Khmer Dubber.
 Test videos are already in its Download folder.

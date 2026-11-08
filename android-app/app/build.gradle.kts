@@ -22,16 +22,30 @@ val keyProps = Properties().apply {
 
 android {
     namespace = "com.khmerdubber.app"
-    compileSdk = 35
-    buildToolsVersion = "35.0.0"
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "com.khmerdubber.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36  // Google Play requires Android 16 (API 36) for new apps and updates
         versionCode = appVersionCode
         versionName = appVersionName
-        buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
+    }
+
+    // Two builds of the same app:
+    //   github: sideloaded APK that updates itself from GitHub Releases (release.sh)
+    //   play:   Google Play bundle, no self-update (Play policy) - updates come from Play
+    flavorDimensions += "store"
+    productFlavors {
+        create("github") {
+            dimension = "store"
+            buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
+        }
+        create("play") {
+            dimension = "store"
+            buildConfigField("String", "UPDATE_REPO", "\"\"")
+        }
     }
 
     buildFeatures {

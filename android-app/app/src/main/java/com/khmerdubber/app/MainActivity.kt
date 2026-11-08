@@ -16,6 +16,8 @@ import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.view.WindowInsets
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -148,13 +150,25 @@ class MainActivity : Activity() {
             GuideOverlay.Step(btnStart, "ចុចចាប់ផ្តើម! រួចរង់ចាំបន្តិច\nវីដេអូរួចរាល់នៅក្នុង\nMovies/KhmerDubber"),
             GuideOverlay.Step(findViewById(R.id.btnSettings), "ការកំណត់ផ្សេងៗ នៅទីនេះ\n(ល្បឿន សំឡេង ...)"),
         )
+        // Back closes the guide. Android 13+ (and every phone once the app targets Android 16)
+        // sends Back to a registered callback instead of onBackPressed.
+        var backCallback: Any? = null
         val guide = GuideOverlay(this, steps, findViewById(R.id.scroll)) {
             getSharedPreferences("app", MODE_PRIVATE).edit().putBoolean("guideDone", true).apply()
+            if (Build.VERSION.SDK_INT >= 33) {
+                (backCallback as? OnBackInvokedCallback)?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+            }
         }
         guide.tag = "guide"
         root.addView(guide, android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+        if (Build.VERSION.SDK_INT >= 33) {
+            val cb = OnBackInvokedCallback { guide.finish() }
+            backCallback = cb
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb)
+        }
     }
 
+    /** Android 12 and older. */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         val guide = findViewById<android.view.ViewGroup>(android.R.id.content).findViewWithTag<GuideOverlay>("guide")
