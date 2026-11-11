@@ -48,6 +48,23 @@ Everything else is in **⚙ Settings** (top right): speed, pitch, voice volume, 
 original sound, translate, skip songs, and **Lines made at once**. It makes 16 lines at the same
 time by default, which is the fastest. Lower it if your internet is slow or lines fail.
 
+### No .srt? The app writes it
+Choose **only a video** and tap **Start dubbing**. The app listens to the video, writes the subtitle
+with its timings, translates it to Khmer and dubs it. The Khmer `.srt` is saved in
+**Download/KhmerDubber**, so you can fix lines and dub again with the corrected file. A video that has
+its own .srt still uses that file.
+
+How it works, for whoever builds the app:
+- The video's sound (not the picture) is sent to OpenAI's `whisper-1` model in pieces of about
+  5 minutes. **OpenAI shuts `whisper-1` down on 26 February 2027**; this part needs rework before then.
+- It needs an OpenAI API key, built into the app and billed to the key's owner for every minute of
+  audio. Put `apiKey=sk-...` in `android-app/openai.properties` (never committed) for builds on your
+  computer, and set the `OPENAI_API_KEY` secret on GitHub for released APKs. Without a key the app is
+  built with this feature off and asks for a .srt as before.
+- The key is masked inside the APK, not protected: someone determined can extract it. Set a monthly
+  spending limit on that OpenAI project.
+- Over music or noise with nobody talking, the model sometimes invents a short line.
+
 ### Logo & Lower third
 Tap the **Logo & Lower third** card to put your brand on every dubbed video:
 - **Logo**: choose a picture (PNG with a see-through background looks best) or an animated logo video

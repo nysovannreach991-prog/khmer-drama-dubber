@@ -37,6 +37,7 @@ FEATURES
 • Start a line with [M] or [F] to give different characters different voices
 • The voice follows each subtitle's timing; long lines are sped up just enough to fit
 • The original sound stays quietly in the background and is lowered while the Khmer voice speaks
+• No subtitle file? Choose only the video and the app writes the subtitle from its sound
 • Dub many episodes at once: ep01.mp4 + ep01.srt, ep02.mp4 + ep02.srt…
 • Put your logo and lower third on every video: a picture, Khmer text, or an animated green-screen / blue-screen video (MP4, MOV)
 • Separate layouts for landscape (16:9) and vertical (9:16) videos

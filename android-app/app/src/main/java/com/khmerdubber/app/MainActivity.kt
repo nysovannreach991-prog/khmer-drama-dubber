@@ -61,6 +61,10 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         edgeToEdge()
         settings = Settings.load(this)
+        if (BuildConfig.DEBUG) {
+            // tests: a debug build can be pointed at a pretend subtitle server
+            File(filesDir, "openai_base.txt").takeIf { it.exists() }?.let { OpenAi.base = it.readText().trim() }
+        }
 
         txtPairs = findViewById(R.id.txtPairs)
         btnVideo = findViewById(R.id.btnVideo)
@@ -292,7 +296,9 @@ class MainActivity : Activity() {
     }
 
     private fun updatePairs() {
-        val r = Pairing.pair(picked)
+        // a video without a .srt is still a job when this build can write subtitles itself
+        val auto = OpenAi.enabled
+        val r = Pairing.pair(picked, auto)
         jobs = r.jobs
         val videos = picked.values.filter { Pairing.isVideo(it.first, it.second) }.map { it.first }
         val srts = picked.values.filter { Pairing.isSrt(it.first) }.map { it.first }
@@ -304,7 +310,7 @@ class MainActivity : Activity() {
             else -> "🎬   ${videos.size} videos"
         }
         btnSubtitle.text = when (srts.size) {
-            0 -> "📝   Choose subtitle (.srt)"
+            0 -> if (auto) "📝   Subtitle: automatic  (or choose .srt)" else "📝   Choose subtitle (.srt)"
             1 -> "📝   ${srts[0]}"
             else -> "📝   ${srts.size} subtitles"
         }
@@ -322,7 +328,7 @@ class MainActivity : Activity() {
             sb.setSpan(ForegroundColorSpan(getColor(color)), s, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         if (r.jobs.size == 1 && r.lonelyVideos.isEmpty() && r.lonelySrts.isEmpty()) {
-            line("✓  Ready", R.color.ok)
+            line(if (r.jobs[0].srt == null) "✓  Ready  ·  subtitle will be written automatically" else "✓  Ready", R.color.ok)
         } else {
             r.jobs.forEach { line("✓  ${it.videoName}  +  ${it.srtName}", R.color.ok) }
         }
@@ -405,7 +411,7 @@ class MainActivity : Activity() {
     private fun start() {
         if (DubBus.state.running) return
         if (jobs.isEmpty()) {
-            toast("Add a video and its .srt file first")
+            toast(if (OpenAi.enabled) "Choose a video first" else "Add a video and its .srt file first")
             return
         }
         if (Build.VERSION.SDK_INT < 29 &&
@@ -610,7 +616,8 @@ object Pairing {
         ra.size - rb.size
     }
 
-    fun pair(files: Map<Uri, Pair<String, String?>>): Result {
+    /** [auto] = a video without a subtitle is still a job (its subtitle is written automatically). */
+    fun pair(files: Map<Uri, Pair<String, String?>>, auto: Boolean = false): Result {
         val videos = mutableListOf<Pair<Uri, String>>()
         val srts = mutableListOf<Pair<Uri, String>>()
         val others = mutableListOf<String>()
@@ -643,6 +650,10 @@ object Pairing {
         if (lonely.size == 1 && leftSrts.size == 1) {
             jobs.add(DubJob(lonely[0].first, lonely[0].second, leftSrts[0].first, leftSrts[0].second))
             return Result(jobs, emptyList(), emptyList(), others)
+        }
+        if (auto) {
+            lonely.forEach { jobs.add(DubJob(it.first, it.second, null, DubJob.AUTO_NAME)) }
+            return Result(jobs, emptyList(), leftSrts.map { it.second }, others)
         }
         return Result(jobs, lonely.map { it.second }, leftSrts.map { it.second }, others)
     }

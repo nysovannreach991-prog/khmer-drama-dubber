@@ -14,13 +14,16 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.ceil
 
-class DubJob(val video: Uri, val videoName: String, val srt: Uri, val srtName: String)
+/** [srt] = null: there is no subtitle file, the subtitle is written automatically from the video's sound. */
+class DubJob(val video: Uri, val videoName: String, val srt: Uri?, val srtName: String) {
+    companion object { const val AUTO_NAME = "automatic subtitle" }
+}
 
 class DubResult(val video: Uri, val videoPath: String, val srtPath: String)
 
 /**
  * One video, start to finish:
- * read .srt -> translate to Khmer -> edge-tts each line -> re-speak lines that are
+ * read .srt (or write it from the video's sound) -> translate to Khmer -> edge-tts each line -> re-speak lines that are
  * too long at a faster rate -> build the voice track -> mix into the video -> save.
  */
 class DubEngine(
@@ -60,10 +63,15 @@ class DubEngine(
         val ttsDir = File(work, "tts").apply { mkdirs() }
 
         val info = VideoMixer.probe(ctx, job.video)
-        val raw = ctx.contentResolver.openInputStream(job.srt)?.use { it.readBytes() }
-            ?: throw IOException("cannot open ${job.srtName}")
-        val cues = Srt.parse(Srt.decode(raw))
-        if (cues.isEmpty()) throw IOException("no subtitle lines found in ${job.srtName}")
+        val cues = if (job.srt == null) {
+            autoSubtitle(job, work, info)
+        } else {
+            val raw = ctx.contentResolver.openInputStream(job.srt)?.use { it.readBytes() }
+                ?: throw IOException("cannot open ${job.srtName}")
+            Srt.parse(Srt.decode(raw)).also {
+                if (it.isEmpty()) throw IOException("no subtitle lines found in ${job.srtName}")
+            }
+        }
         log("${cues.size} subtitle lines, video ${fmt(info.durationMs)}")
 
         // 1. translate
@@ -224,6 +232,66 @@ class DubEngine(
         work.deleteRecursively()
         val savedName = Output.actualName(ctx, videoUri, "$name.mp4")
         return DubResult(videoUri, "Movies/${Output.FOLDER}/$savedName", srtPath)
+    }
+
+    /**
+     * No .srt: cut the video's sound into small pieces and let OpenAI write what is said,
+     * with times, in the language spoken (the translate step then makes it Khmer).
+     * Every finished piece is kept, so a stopped job continues where it left off.
+     */
+    private fun autoSubtitle(job: DubJob, work: File, info: VideoInfo): List<Cue> {
+        val done = File(work, "auto.srt")
+        if (done.exists()) Srt.parse(done.readText()).takeIf { it.isNotEmpty() }?.let { return it }
+        if (!OpenAi.enabled) throw IOException("this video has no .srt file. Choose its subtitle.")
+        if (!info.hasAudio) throw IOException("this video has no sound to make subtitles from")
+
+        step("Getting the sound ready", 0f)
+        val dir = File(work, "listen")
+        val chunks = SpeechChunks.make(ctx, job.video, dir, info.durationMs, cancelled) { f ->
+            step("Getting the sound ready  ${(f * 100).toInt()}%", f)
+        }
+        checkCancel()
+        step("Writing subtitles from the sound  0/${chunks.size}", 0f)
+        val t0 = System.currentTimeMillis()
+
+        val lines = arrayOfNulls<List<OpenAi.Line>>(chunks.size)
+        val finished = AtomicInteger(0)
+        var error: Throwable? = null
+        val pool = Executors.newFixedThreadPool(3)
+        try {
+            chunks.mapIndexed { n, c ->
+                pool.submit(Runnable {
+                    if (cancelled() || error != null) return@Runnable
+                    try {
+                        val cache = File(dir, "${c.file.nameWithoutExtension}.json")
+                        var got: List<OpenAi.Line>? = null
+                        if (cache.exists()) got = runCatching { OpenAi.parseLines(cache.readText(), c.startMs, c.durMs) }.getOrNull()
+                        if (got == null) {
+                            val answer = OpenAi.listen(c.file, cancelled)
+                            got = OpenAi.parseLines(answer, c.startMs, c.durMs)
+                            cache.writeText(answer)
+                        }
+                        lines[n] = got
+                        val d = finished.incrementAndGet()
+                        step("Writing subtitles from the sound  $d/${chunks.size}", d.toFloat() / chunks.size)
+                    } catch (e: Throwable) {
+                        synchronized(lines) { if (error == null) error = e }
+                    }
+                })
+            }.forEach { it.get() }
+        } finally {
+            pool.shutdownNow()
+        }
+        checkCancel()
+        error?.let { throw if (it is CancelledException) it else IOException(it.message ?: it.toString()) }
+
+        val all = lines.filterNotNull().flatten().sortedBy { it.startMs }
+        if (all.isEmpty()) throw IOException("no speech was found in this video")
+        val cues = all.map { Cue(it.startMs, maxOf(it.endMs, it.startMs + 1), it.text) }
+        done.writeText(Srt.write(cues, withTags = false))
+        dir.deleteRecursively()
+        log("Subtitles written from the sound: ${cues.size} lines in ${fmt(System.currentTimeMillis() - t0)}")
+        return cues
     }
 
     /** One lock per clip, so two lines with the same words don't make (and delete) the same files at once. */

@@ -50,15 +50,21 @@ appeal to children?" No. (Keeps it outside the Families program and its extra ru
 | Does your app collect or share any of the required user data types? | Yes |
 | Is all of the user data collected by your app encrypted in transit? | Yes |
 | Do you provide a way for users to request that their data is deleted? | No (nothing is stored) |
-| Data types | **Files and docs** only |
+| Data types | **Files and docs**, and **Audio → Other audio files** |
 | Files and docs → Collected | Yes |
 | Files and docs → Shared | Yes (subtitle text goes to Google Translate and Microsoft's speech service) |
 | Processed ephemerally? | Yes |
 | Required or optional? | Required |
 | Purpose (collected and shared) | App functionality |
 
-Nothing else is collected: no location, contacts, IDs, photos/videos (videos never leave the phone),
-audio, app activity, crash logs or diagnostics.
+| Other audio files → Collected | Yes |
+| Other audio files → Shared | Yes (when a video is dubbed without a .srt, its sound goes to OpenAI's speech-to-text service to write the subtitle) |
+| Other audio files → Processed ephemerally? | No (OpenAI may keep API data for a limited time) |
+| Other audio files → Required or optional? | Optional (the user can choose a .srt file instead) |
+| Other audio files → Purpose | App functionality |
+
+Nothing else is collected: no location, contacts, IDs, photos/videos (the picture never leaves the
+phone), voice recordings, app activity, crash logs or diagnostics.
 
 **Foreground service permissions** → `FOREGROUND_SERVICE_DATA_SYNC` → task type **Data sync**:
 

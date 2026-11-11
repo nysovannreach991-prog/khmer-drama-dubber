@@ -42,6 +42,9 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: Test and build
+        env:
+          # key for automatic subtitles, built into the app (the feature is off if this secret is not set)
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --console=plain testGithubReleaseUnitTest assembleGithubRelease

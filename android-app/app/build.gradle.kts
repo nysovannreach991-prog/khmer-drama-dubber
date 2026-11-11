@@ -1,3 +1,4 @@
+import java.security.SecureRandom
 import java.util.Properties
 
 plugins {
@@ -20,6 +21,20 @@ val keyProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// OpenAI key for automatic subtitles. It is put inside the app at build time and is never
+// committed: it comes from android-app/openai.properties (apiKey=sk-...) on this computer,
+// or from the OPENAI_API_KEY secret on GitHub. No key = the feature is off in that build.
+// It is XOR-masked so it is not a readable string in the APK. This hides it from a casual
+// look only; anyone determined can still get a key out of an app.
+val openAiKey: String = (Properties().apply {
+    val f = rootProject.file("openai.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}.getProperty("apiKey") ?: System.getenv("OPENAI_API_KEY") ?: "").trim()
+val openAiPad = ByteArray(openAiKey.toByteArray().size).also { SecureRandom().nextBytes(it) }
+fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+val openAiA = hex(openAiKey.toByteArray().mapIndexed { i, v -> (v.toInt() xor openAiPad[i].toInt()).toByte() }.toByteArray())
+val openAiB = hex(openAiPad)
+
 android {
     namespace = "com.khmerdubber.app"
     compileSdk = 36
@@ -31,6 +46,8 @@ android {
         targetSdk = 36  // Google Play requires Android 16 (API 36) for new apps and updates
         versionCode = appVersionCode
         versionName = appVersionName
+        buildConfigField("String", "OPENAI_A", "\"$openAiA\"")
+        buildConfigField("String", "OPENAI_B", "\"$openAiB\"")
     }
 
     // Two builds of the same app:
@@ -86,4 +103,5 @@ dependencies {
     implementation("androidx.media3:media3-effect:1.9.4")
     implementation("androidx.media3:media3-common:1.9.4")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")  // real JSON in unit tests (Android's is a stub there)
 }
