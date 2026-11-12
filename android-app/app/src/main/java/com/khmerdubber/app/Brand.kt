@@ -31,6 +31,7 @@ import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
@@ -560,10 +561,40 @@ object BrandExport {
     fun run(
         ctx: Context, input: File, output: File, brand: Brand, durationMs: Long,
         cancelled: () -> Boolean, progress: (Float) -> Unit,
+    ) = run(ctx, Uri.fromFile(input), input.length(), output, brand, durationMs, 1.15, cancelled, progress)
+
+    /**
+     * Re-make the picture of [input] as H.264 (which every phone can save and play), with the
+     * logo and lower third of [brand] drawn on it. [brand] = null only changes the format.
+     * [quality] scales the bitrate: a newer format (AV1, VP9) needs more bits as H.264 to look the same.
+     */
+    fun run(
+        ctx: Context, input: Uri, inputBytes: Long, output: File, brand: Brand?, durationMs: Long,
+        quality: Double, cancelled: () -> Boolean, progress: (Float) -> Unit,
     ) {
-        val art = BrandArt(ctx, brand)
+        val art = brand?.let { BrandArt(ctx, it) }
         val dur = durationMs / 1000.0
         val overlays = ArrayList<TextureOverlay>()
+        if (art != null && brand != null) addOverlays(overlays, art, brand, dur)
+        if (brand != null && overlays.isEmpty()) throw IOException("nothing to add")
+
+        // keep about the same quality and file size as the original
+        val secs = max(1.0, dur)
+        val bitrate = if (inputBytes <= 0) 5_000_000
+        else ((inputBytes * 8 / secs - 170_000) * quality).coerceIn(1_500_000.0, 16_000_000.0).toInt()
+
+        val edited = EditedMediaItem.Builder(MediaItem.fromUri(input))
+            .setEffects(Effects(emptyList<AudioProcessor>(),
+                if (overlays.isEmpty()) emptyList() else listOf<Effect>(OverlayEffect(overlays))))
+            .build()
+        // an HDR recording becomes normal colours, which H.264 can carry
+        val composition = Composition.Builder(EditedMediaItemSequence.Builder(edited).build())
+            .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
+            .build()
+        export(ctx, composition, bitrate, output, cancelled, progress)
+    }
+
+    private fun addOverlays(overlays: ArrayList<TextureOverlay>, art: BrandArt, brand: Brand, dur: Double) {
         if (art.hasLowerThird) {
             if (art.lowerIsVideo) {
                 val full = BrandArt.Look(1f, 0f, 0f)  // a video brings its own animation
@@ -582,16 +613,12 @@ object BrandExport {
             overlays.add(PlacedOverlay({ w, h -> art.logo(w, h) }, { _, _, _, _ -> logoLook },
                 clip?.let { c -> { us: Long -> c.indexAt(us / 1e6, loop = true) } }))
         }
-        if (overlays.isEmpty()) throw IOException("nothing to add")
+    }
 
-        // keep about the same quality and file size as the original
-        val secs = max(1.0, dur)
-        val bitrate = ((input.length() * 8 / secs - 170_000) * 1.15).coerceIn(1_500_000.0, 16_000_000.0).toInt()
-
-        val edited = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(input)))
-            .setEffects(Effects(emptyList<AudioProcessor>(), listOf<Effect>(OverlayEffect(overlays))))
-            .build()
-
+    private fun export(
+        ctx: Context, composition: Composition, bitrate: Int, output: File,
+        cancelled: () -> Boolean, progress: (Float) -> Unit,
+    ) {
         output.delete()
         val thread = HandlerThread("brand-export").apply { start() }
         val handler = Handler(thread.looper)
@@ -611,6 +638,7 @@ object BrandExport {
                 val t = Transformer.Builder(ctx)
                     .setLooper(thread.looper)
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
+                    .setAudioMimeType(MimeTypes.AUDIO_AAC)   // e.g. a WebM's Opus sound can't stay as it is in an MP4
                     .setEncoderFactory(
                         DefaultEncoderFactory.Builder(ctx)
                             .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrate).build())
@@ -629,7 +657,7 @@ object BrandExport {
                     })
                     .build()
                 transformer = t
-                t.start(edited, output.absolutePath)
+                t.start(composition, output.absolutePath)
                 handler.postDelayed(poll, 400)
             } catch (e: Exception) {
                 failure = e

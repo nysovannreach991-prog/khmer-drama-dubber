@@ -195,15 +195,48 @@ class DubEngine(
         checkCancel()
 
         // 5. mix into the video
+        val brand = Brand.load(ctx)
+        var source = job.video
+        var sourceInfo = info
+        var brandDone = false
+        val forced = BuildConfig.DEBUG && File(ctx.filesDir, "force_convert").exists()   // tests
+        if (forced || !VideoMixer.canCopy(ctx, job.video, work)) {
+            // The picture is in a format this phone can't save in an MP4 (AV1, VP9, ...).
+            // Re-make it as H.264; the logo and lower third go on in the same pass.
+            val kind = info.videoMime.removePrefix("video/").replace("av01", "AV1").replace("x-vnd.on2.vp9", "VP9")
+            val withBrand = brand.active(ctx)
+            val h264 = File(work, if (withBrand) "h264_brand.mp4" else "h264.mp4")
+            if (!h264.exists()) {
+                val t0 = System.currentTimeMillis()
+                val part = File(work, "h264.part.mp4")
+                val bytes = runCatching {
+                    ctx.contentResolver.openAssetFileDescriptor(job.video, "r")?.use { it.length } ?: 0L
+                }.getOrDefault(0L)
+                try {
+                    BrandExport.run(ctx, job.video, bytes, part, brand.takeIf { withBrand }, info.durationMs, 1.6, cancelled) { f ->
+                        step("Changing the video to MP4 (H.264)  ${(f * 100).toInt()}%", f)
+                    }
+                } catch (e: CancelledException) {
+                    throw e
+                } catch (e: Exception) {
+                    throw IOException("this video is $kind and this phone could not change it to MP4 (${e.message}). Convert it to MP4 (H.264) first.")
+                }
+                if (!part.renameTo(h264)) throw IOException("cannot save the converted video")
+                log("This video was $kind; changed to MP4 (H.264) in ${fmt(System.currentTimeMillis() - t0)}")
+            }
+            checkCancel()
+            source = Uri.fromFile(h264)
+            sourceInfo = VideoMixer.probe(ctx, source)
+            brandDone = withBrand
+        }
         val outTmp = File(work, "out.mp4")
-        VideoMixer.mix(ctx, job.video, info, dub, outTmp, s, cancelled) { f ->
+        VideoMixer.mix(ctx, source, sourceInfo, dub, outTmp, s, cancelled) { f ->
             step("Putting Khmer voice into video", f)
         }
 
         // 6. logo + lower third (the picture is re-made, so this takes longer)
         var finalVideo = outTmp
-        val brand = Brand.load(ctx)
-        if (brand.active(ctx)) {
+        if (brand.active(ctx) && !brandDone) {
             val branded = File(work, "branded.mp4")
             val t0 = System.currentTimeMillis()
             try {

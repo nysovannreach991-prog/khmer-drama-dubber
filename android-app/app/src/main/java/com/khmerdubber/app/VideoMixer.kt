@@ -58,6 +58,30 @@ object VideoMixer {
     }
 
     /**
+     * Can this video's picture be copied into an MP4 as it is? False for formats this phone
+     * can't save (AV1 before Android 14, VP9, ...): those are re-made as H.264 first.
+     */
+    fun canCopy(ctx: Context, uri: Uri, tmpDir: File): Boolean {
+        val ex = MediaExtractor()
+        val probe = File(tmpDir, "probe.mp4")
+        var muxer: MediaMuxer? = null
+        try {
+            ex.setDataSource(ctx, uri, null)
+            val fmt = (0 until ex.trackCount).map { ex.getTrackFormat(it) }
+                .firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true } ?: return false
+            muxer = MediaMuxer(probe.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxer.addTrack(fmt)
+            return true
+        } catch (e: Exception) {
+            return false
+        } finally {
+            runCatching { muxer?.release() }
+            runCatching { ex.release() }
+            probe.delete()
+        }
+    }
+
+    /**
      * Write [out] (MP4): the original video stream copied as-is, plus new AAC audio =
      * original audio (quieter, ducked under speech) + Khmer voice from [dubPcm] (24 kHz mono).
      */

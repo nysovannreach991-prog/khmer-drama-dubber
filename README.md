@@ -65,6 +65,10 @@ How it works, for whoever builds the app:
   spending limit on that OpenAI project.
 - Over music or noise with nobody talking, the model sometimes invents a short line.
 
+### Any video format
+Videos in a format the phone can't save as MP4 (AV1 on Android 13 and older, VP9 / WebM) are changed
+to H.264 automatically before the voice is added. This takes extra time.
+
 ### Logo & Lower third
 Tap the **Logo & Lower third** card to put your brand on every dubbed video:
 - **Logo**: choose a picture (PNG with a see-through background looks best) or an animated logo video
